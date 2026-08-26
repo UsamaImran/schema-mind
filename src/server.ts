@@ -2,11 +2,14 @@ import { App } from "./app.js";
 import { env } from "./config/env.js";
 import { MongoAdapter } from "./infrastructure/mongo/mongodb.adapter.js";
 import { PostgreSQLAdapter } from "./infrastructure/postgres/postgres.adapter.js";
+import { SchemaIngestionInitiator } from "./services/schema.injestion.initiator.js";
 
 const application = new App();
 
 const postgres = new PostgreSQLAdapter();
 const mongodb = new MongoAdapter();
+
+const injestionService = new SchemaIngestionInitiator();
 
 const bootstrap = async (): Promise<void> => {
   try {
@@ -18,6 +21,8 @@ const bootstrap = async (): Promise<void> => {
     const server = application.app.listen(env.PORT, () => {
       console.log(`SchemaMind running on port ${env.PORT}`);
     });
+
+    injestionService.start();
 
     const shutdown = async (): Promise<void> => {
       console.log("Shutting down SchemaMind...");

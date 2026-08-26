@@ -9,21 +9,6 @@ export type SemanticUnitInput = Omit<
 >;
 
 export class SemanticUnitRepository {
-  async replaceForSource(
-    databaseName: string,
-    units: SemanticUnitInput[],
-  ): Promise<void> {
-    await SemanticUnitModel.deleteMany({
-      databaseName,
-    });
-
-    if (units.length === 0) {
-      return;
-    }
-
-    await SemanticUnitModel.insertMany(units);
-  }
-
   async upsert(unit: SemanticUnitInput): Promise<void> {
     await SemanticUnitModel.updateOne(
       {
@@ -39,6 +24,21 @@ export class SemanticUnitRepository {
         upsert: true,
       },
     );
+  }
+
+  async replaceForSource(
+    databaseName: string,
+    units: SemanticUnitInput[],
+  ): Promise<void> {
+    await SemanticUnitModel.deleteMany({
+      databaseName,
+    });
+
+    if (units.length === 0) {
+      return;
+    }
+
+    await SemanticUnitModel.insertMany(units);
   }
 
   async findByTable(
@@ -71,5 +71,36 @@ export class SemanticUnitRepository {
     await SemanticUnitModel.deleteMany({
       databaseName,
     });
+  }
+
+  async hasCompleteIngestion(
+    databaseName: string,
+    expectedTableCount: number,
+  ): Promise<boolean> {
+    const [unitCount, unitsWithoutEmbedding] = await Promise.all([
+      SemanticUnitModel.countDocuments({
+        databaseName,
+        type: "table",
+      }),
+
+      SemanticUnitModel.countDocuments({
+        databaseName,
+        type: "table",
+        $or: [
+          {
+            embedding: {
+              $exists: false,
+            },
+          },
+          {
+            embedding: {
+              $size: 0,
+            },
+          },
+        ],
+      }),
+    ]);
+
+    return unitCount === expectedTableCount && unitsWithoutEmbedding === 0;
   }
 }

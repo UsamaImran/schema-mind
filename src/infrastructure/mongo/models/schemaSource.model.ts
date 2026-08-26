@@ -27,6 +27,12 @@ const schemaSourceSchema = new Schema(
       default: 0,
     },
 
+    schemaFingerprint: {
+      type: String,
+      default: null,
+      index: true,
+    },
+
     lastSyncedAt: {
       type: Date,
       default: null,
@@ -56,13 +62,23 @@ schemaSourceSchema.index(
 
 export interface SchemaSource {
   _id: Types.ObjectId;
+
   databaseName: string;
+
   databaseType: "postgresql";
+
   schemaCount: number;
+
   tableCount: number;
+
+  schemaFingerprint: string | null;
+
   lastSyncedAt: Date | null;
+
   status: "pending" | "processing" | "ready" | "failed";
+
   createdAt: Date;
+
   updatedAt: Date;
 }
 

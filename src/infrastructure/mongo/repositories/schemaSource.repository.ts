@@ -70,18 +70,19 @@ export class SchemaSourceRepository {
     databaseName: string,
     tableCount: number,
     schemaCount: number,
-    databaseType: SchemaSource["databaseType"] = "postgresql",
+    schemaFingerprint: string,
   ): Promise<void> {
     await SchemaSourceModel.updateOne(
       {
         databaseName,
-        databaseType,
+        databaseType: "postgresql",
       },
       {
         $set: {
           status: "ready",
           tableCount,
           schemaCount,
+          schemaFingerprint,
           lastSyncedAt: new Date(),
         },
       },
