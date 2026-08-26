@@ -1,0 +1,30 @@
+{
+  "name": "schema-mind",
+  "version": "1.0.0",
+  "description": "Schema-aware RAG system for natural-language querying of relational databases.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test:schema": "tsx src/scripts/test-schema.introspection.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^2.19.0",
+    "bpe-lite": "^0.5.2",
+    "dotenv": "^17.0.0",
+    "express": "^5.1.0",
+    "mongodb": "^7.6.0",
+    "mongoose": "^9.9.4",
+    "pg": "^8.23.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.20.0",
+    "typescript": "^5.0.0"
+  }
+}
