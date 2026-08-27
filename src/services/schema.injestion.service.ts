@@ -1,11 +1,19 @@
 import { EmbeddingService } from "../infrastructure/embeddings/embedding.service.js";
+
 import { SchemaSourceRepository } from "../infrastructure/mongo/repositories/schemaSource.repository.js";
+
 import {
   SemanticUnitInput,
   SemanticUnitRepository,
 } from "../infrastructure/mongo/repositories/semanticUnit.repository.js";
+
+import { SchemaGraphRepository } from "../infrastructure/mongo/repositories/schemaGraph.repository.js";
+
 import { PostgreSQLSchemaIntrospector } from "../infrastructure/postgres/postgres.schema-introspector.js";
+
 import { TokenizerService } from "../infrastructure/tokenization/tokenizer.service.js";
+
+import { SchemaGraphBuilder } from "../modules/schema/graph/schema-graph.builder.js";
 
 import {
   ColumnDefinition,
@@ -18,10 +26,18 @@ import { createSchemaFingerprint } from "../shared/utils/schema-fingerprint.js";
 export class IngestionService {
   constructor(
     private readonly postgresIntrospector: PostgreSQLSchemaIntrospector,
+
     private readonly semanticUnitRepository: SemanticUnitRepository,
+
+    private readonly schemaGraphRepository: SchemaGraphRepository,
+
     private readonly schemaSourceRepository: SchemaSourceRepository,
+
     private readonly tokenizerService: TokenizerService,
+
     private readonly embeddingService: EmbeddingService,
+
+    private readonly schemaGraphBuilder: SchemaGraphBuilder,
   ) {}
 
   /**
@@ -41,9 +57,11 @@ export class IngestionService {
     );
 
     /*
-     * No SchemaSource means this database has never
-     * been ingested.
+     * --------------------------------------------------
+     * First ingestion
+     * --------------------------------------------------
      */
+
     if (!existingSource) {
       console.log("No existing schema source found. Starting ingestion.");
 
@@ -53,8 +71,11 @@ export class IngestionService {
     }
 
     /*
-     * Schema fingerprint changed.
+     * --------------------------------------------------
+     * Schema changed
+     * --------------------------------------------------
      */
+
     if (existingSource.schemaFingerprint !== fingerprint) {
       console.log("Database schema has changed. Starting re-ingestion.");
 
@@ -64,19 +85,30 @@ export class IngestionService {
     }
 
     /*
-     * Schema has not changed, but ingestion may have been
-     * interrupted before embeddings were completed.
+     * --------------------------------------------------
+     * Check whether all ingestion representations exist
+     * --------------------------------------------------
      */
-    const hasCompleteIngestion =
+
+    const tableCount = databaseSchema.schemas.reduce(
+      (count, schema) => count + schema.tables.length,
+      0,
+    );
+
+    const hasCompleteSemanticIngestion =
       await this.semanticUnitRepository.hasCompleteIngestion(
         databaseSchema.databaseName,
-        databaseSchema.schemas.reduce(
-          (count, schema) => count + schema.tables.length,
-          0,
-        ),
+        tableCount,
       );
 
-    if (!hasCompleteIngestion) {
+    const hasCompleteGraphIngestion =
+      await this.schemaGraphRepository.existsForSource(existingSource._id);
+
+    /*
+     * Either semantic ingestion or graph ingestion
+     * may have been interrupted.
+     */
+    if (!hasCompleteSemanticIngestion || !hasCompleteGraphIngestion) {
       console.log(
         "Schema is unchanged, but ingestion is incomplete. Resuming ingestion.",
       );
@@ -91,6 +123,17 @@ export class IngestionService {
     );
   }
 
+  /**
+   * Executes the complete schema ingestion pipeline.
+   *
+   * The same DatabaseSchema is used to build:
+   *
+   * 1. Semantic representation
+   * 2. Graph representation
+   *
+   * Only the semantic representation requires
+   * tokenization + embeddings.
+   */
   private async ingest(
     databaseSchema: DatabaseSchema,
     fingerprint: string,
@@ -107,27 +150,26 @@ export class IngestionService {
     await this.schemaSourceRepository.updateStatus(databaseName, "processing");
 
     try {
+      console.log("Building schema graph...");
+
+      const schemaGraph = this.schemaGraphBuilder.build(databaseSchema);
+
+      console.log(
+        `Graph built: ${schemaGraph.nodes.length} nodes, ${schemaGraph.edges.length} edges`,
+      );
+
       const semanticUnits: SemanticUnitInput[] = [];
 
       for (const schema of databaseSchema.schemas) {
         for (const table of schema.tables) {
-          /*
-           * 1. Build semantic representation
-           */
           const content = this.buildSemanticContent(
             databaseName,
             schema.name,
             table,
           );
 
-          /*
-           * 2. Tokenization
-           */
           const tokenCount = this.tokenizerService.count(content);
 
-          /*
-           * 3. Embedding
-           */
           const [embedding] = await this.embeddingService.embed([content]);
 
           if (!embedding?.length) {
@@ -136,9 +178,6 @@ export class IngestionService {
             );
           }
 
-          /*
-           * 4. Prepare MongoDB document
-           */
           semanticUnits.push({
             sourceId: schemaSource._id,
             databaseName,
@@ -152,13 +191,24 @@ export class IngestionService {
         }
       }
 
-      /*
-       * Replace the semantic representation for this
-       * database with the newly generated version.
-       */
       await this.semanticUnitRepository.replaceForSource(
         databaseName,
         semanticUnits,
+      );
+
+      console.log(
+        `Semantic ingestion completed: ${semanticUnits.length} units`,
+      );
+
+      await this.schemaGraphRepository.replaceForSource({
+        sourceId: schemaSource._id,
+        databaseName,
+        nodes: schemaGraph.nodes,
+        edges: schemaGraph.edges,
+      });
+
+      console.log(
+        `Graph ingestion completed: ${schemaGraph.nodes.length} nodes, ${schemaGraph.edges.length} edges`,
       );
 
       const tableCount = databaseSchema.schemas.reduce(
@@ -168,10 +218,6 @@ export class IngestionService {
 
       const schemaCount = databaseSchema.schemas.length;
 
-      /*
-       * Store the fingerprint only after the entire
-       * ingestion pipeline succeeds.
-       */
       await this.schemaSourceRepository.markSynced(
         databaseName,
         tableCount,
@@ -180,7 +226,7 @@ export class IngestionService {
       );
 
       console.log(
-        `Schema ingestion completed: ${semanticUnits.length} semantic units`,
+        `Schema ingestion completed successfully for ${databaseName}`,
       );
     } catch (error) {
       await this.schemaSourceRepository.updateStatus(databaseName, "failed");

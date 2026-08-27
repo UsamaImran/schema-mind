@@ -152,4 +152,62 @@ export class SemanticUnitRepository {
       },
     ]);
   }
+
+  async keywordSearch(
+    databaseName: string,
+    question: string,
+    limit: number = 5,
+  ): Promise<SemanticSearchResult[]> {
+    return SemanticUnitModel.aggregate<SemanticSearchResult>([
+      {
+        $search: {
+          index: "semantic_units_keyword_index",
+
+          compound: {
+            filter: [
+              {
+                equals: {
+                  path: "databaseName",
+                  value: databaseName,
+                },
+              },
+              {
+                equals: {
+                  path: "type",
+                  value: "table",
+                },
+              },
+            ],
+
+            must: [
+              {
+                text: {
+                  query: question,
+                  path: ["tableName", "schemaName", "content"],
+                },
+              },
+            ],
+          },
+        },
+      },
+      {
+        $limit: limit,
+      },
+      {
+        $project: {
+          _id: 1,
+          sourceId: 1,
+          databaseName: 1,
+          schemaName: 1,
+          tableName: 1,
+          type: 1,
+          content: 1,
+          tokenCount: 1,
+          score: {
+            $meta: "searchScore",
+          },
+        },
+      },
+    ]);
+  }
 }

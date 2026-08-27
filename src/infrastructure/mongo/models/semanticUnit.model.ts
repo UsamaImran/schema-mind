@@ -95,27 +95,3 @@ export const SemanticUnitModel = model<SemanticUnit>(
   semanticUnitSchema,
   "semantic_units",
 );
-
-// MongoDB Vector Search index
-SemanticUnitModel.collection.createSearchIndex({
-  name: "semantic_units_vector_index",
-  type: "vectorSearch",
-  definition: {
-    fields: [
-      {
-        type: "vector",
-        path: "embedding",
-        numDimensions: 3072,
-        similarity: "cosine",
-      },
-      {
-        type: "filter",
-        path: "databaseName",
-      },
-      {
-        type: "filter",
-        path: "type",
-      },
-    ],
-  },
-});

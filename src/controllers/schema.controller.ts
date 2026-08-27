@@ -38,11 +38,11 @@ export class SchemaController {
         retrievalOptions,
       );
 
-      const sql = await this.sqlGenerator.generate(question, results);
+      //   const sql = await this.sqlGenerator.generate(question, results);
 
       res.status(200).json({
         question,
-        sql,
+        // sql,
         results,
       });
     } catch (error) {

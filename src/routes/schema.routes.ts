@@ -5,6 +5,7 @@ import { SemanticUnitRepository } from "../infrastructure/mongo/repositories/sem
 import { SchemaRetriever } from "../modules/schema/retrieval/schema.retriever.js";
 import { SchemaController } from "../controllers/schema.controller.js";
 import { SqlGenerator } from "../modules/generation/sql.generator.js";
+import { SchemaGraphRepository } from "../infrastructure/mongo/repositories/schemaGraph.repository.js";
 
 const router = Router();
 
@@ -12,9 +13,12 @@ const embeddingService = new EmbeddingService();
 
 const semanticUnitRepository = new SemanticUnitRepository();
 
+const schemaGraphRepository = new SchemaGraphRepository();
+
 const schemaRetriever = new SchemaRetriever(
   embeddingService,
   semanticUnitRepository,
+  schemaGraphRepository,
 );
 
 const sqlGenerator = new SqlGenerator();
