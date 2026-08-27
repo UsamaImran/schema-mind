@@ -93,12 +93,9 @@ export class SchemaGraphRepository {
   /**
    * Search graph nodes using MongoDB Atlas Search.
    *
-   * This is the graph retrieval step.
-   *
-   * We do NOT load the entire graph here.
-   *
-   * MongoDB identifies the nodes that are relevant to the
-   * natural-language question.
+   * Uses wildcard matching on individual query terms against
+   * tableName and schemaName. The databaseName filter uses
+   * exact matching (equals) since it is indexed as token.
    */
   async keywordSearch(
     databaseName: string,
@@ -106,6 +103,32 @@ export class SchemaGraphRepository {
     options: GraphSearchOptions = {},
   ): Promise<GraphSearchResult[]> {
     const limit = this.resolveLimit(options.limit);
+
+    const terms = query
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+    if (terms.length === 0) {
+      return [];
+    }
+
+    const shouldClauses = terms.flatMap((term) => [
+      {
+        wildcard: {
+          query: `*${term}*`,
+          path: "nodes.tableName",
+          allowAnalyzedField: true,
+        },
+      },
+      {
+        wildcard: {
+          query: `*${term}*`,
+          path: "nodes.schemaName",
+          allowAnalyzedField: true,
+        },
+      },
+    ]);
 
     const pipeline: any = [
       {
@@ -115,35 +138,14 @@ export class SchemaGraphRepository {
           compound: {
             filter: [
               {
-                text: {
-                  query: databaseName,
+                equals: {
                   path: "databaseName",
+                  value: databaseName,
                 },
               },
             ],
 
-            should: [
-              {
-                text: {
-                  query,
-                  path: "nodes.schemaName",
-                },
-              },
-
-              {
-                text: {
-                  query,
-                  path: "nodes.tableName",
-                },
-              },
-
-              {
-                text: {
-                  query,
-                  path: "nodes.columnName",
-                },
-              },
-            ],
+            should: shouldClauses,
 
             minimumShouldMatch: 1,
           },

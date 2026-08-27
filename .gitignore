@@ -4,3 +4,5 @@ dist/
 
 *.log
 npm-debug.log*
+
+docker/
