@@ -93,9 +93,13 @@ export class SchemaGraphRepository {
   /**
    * Search graph nodes using MongoDB Atlas Search.
    *
-   * Uses wildcard matching on individual query terms against
-   * tableName and schemaName. The databaseName filter uses
-   * exact matching (equals) since it is indexed as token.
+   * Two-step hybrid retrieval:
+   * 1. Find seed nodes whose table names match any query term (OR logic)
+   * 2. Traverse the graph from seeds to discover related tables via FKs
+   *
+   * This makes graph search a complementary signal to semantic and keyword:
+   * - Semantic/keyword find tables by content similarity
+   * - Graph finds tables that are structurally connected to those
    */
   async keywordSearch(
     databaseName: string,
@@ -104,7 +108,42 @@ export class SchemaGraphRepository {
   ): Promise<GraphSearchResult[]> {
     const limit = this.resolveLimit(options.limit);
 
+    // Step 1: Find seed nodes by matching individual query terms to table names
+    const seedNodeIds = await this.findSeedNodes(databaseName, query);
+    if (seedNodeIds.length === 0) {
+      return [];
+    }
+
+    // Step 2: Traverse from seeds to find related tables (FK chains)
+    const traversalResults = await this.traverse(databaseName, seedNodeIds, {
+      maxDepth: 2,
+      limit,
+    });
+
+    // Convert traversal results to GraphSearchResult format
+    return traversalResults.map((result) => ({
+      nodeId: result.nodeId,
+      databaseName: result.databaseName,
+      schemaName: result.schemaName,
+      tableName: result.tableName,
+      columnName: result.columnName,
+      graphRank: result.graphRank,
+      score: result.score,
+    }));
+  }
+
+  /**
+   * Find seed nodes by matching query terms against table names.
+   *
+   * Uses Atlas Search with OR logic: any single term matching any table
+   * name returns the document. After $unwind, we collect the nodeIds.
+   */
+  private async findSeedNodes(
+    databaseName: string,
+    query: string,
+  ): Promise<string[]> {
     const terms = query
+      .toLowerCase()
       .split(/\s+/)
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
@@ -113,28 +152,17 @@ export class SchemaGraphRepository {
       return [];
     }
 
-    const shouldClauses = terms.flatMap((term) => [
-      {
-        wildcard: {
-          query: `*${term}*`,
-          path: "nodes.tableName",
-          allowAnalyzedField: true,
-        },
+    const shouldClauses = terms.map((term) => ({
+      text: {
+        query: term,
+        path: "nodes.tableName",
       },
-      {
-        wildcard: {
-          query: `*${term}*`,
-          path: "nodes.schemaName",
-          allowAnalyzedField: true,
-        },
-      },
-    ]);
+    }));
 
     const pipeline: any = [
       {
         $search: {
           index: "schema_graph_node_search_index",
-
           compound: {
             filter: [
               {
@@ -144,81 +172,34 @@ export class SchemaGraphRepository {
                 },
               },
             ],
-
             should: shouldClauses,
-
             minimumShouldMatch: 1,
           },
         },
       },
-
-      {
-        $unwind: "$nodes",
-      },
-
+      { $unwind: "$nodes" },
       {
         $project: {
           _id: 0,
-
           node: "$nodes",
-
-          score: {
-            $meta: "searchScore",
-          },
         },
       },
-
-      {
-        $match: {
-          "node.type": "table",
-        },
-      },
-
-      {
-        $sort: {
-          score: -1,
-        },
-      },
-
-      {
-        $limit: limit,
-      },
+      { $match: { "node.type": "table" } },
+      { $limit: 10 },
     ];
 
     const results = await SchemaGraphModel.aggregate(pipeline).exec();
 
     return results.map(
-      (
-        result: {
-          node: SchemaGraphNode;
-          score: number;
-        },
-        index: number,
-      ) => ({
-        nodeId: result.node.nodeId,
-        databaseName: result.node.databaseName,
-        ...(result.node.schemaName !== undefined && {
-          schemaName: result.node.schemaName,
-        }),
-        ...(result.node.tableName !== undefined && {
-          tableName: result.node.tableName,
-        }),
-        ...(result.node.columnName !== undefined && {
-          columnName: result.node.columnName,
-        }),
-        graphRank: index + 1,
-        score: result.score,
-      }),
+      (result: { node: SchemaGraphNode }) => result.node.nodeId,
     );
   }
 
   /**
    * Traverse the graph from previously retrieved seed nodes.
    *
-   * MongoDB is used to retrieve the graph document.
-   * The actual traversal happens in memory.
-   *
-   * This should happen AFTER graph retrieval.
+   * Multi-source BFS that discovers related tables via foreign-key
+   * relationships. Returns tables ranked by graph distance from seeds.
    */
   async traverse(
     databaseName: string,
