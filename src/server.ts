@@ -14,7 +14,7 @@ const injestionService = new SchemaIngestionInitiator();
 const bootstrap = async (): Promise<void> => {
   try {
     await postgres.connect();
-    mongodb.connect();
+    await mongodb.connect();
 
     console.log(`DB: ${postgres.getDatabaseName()} connected!`);
 
@@ -22,7 +22,7 @@ const bootstrap = async (): Promise<void> => {
       console.log(`SchemaMind running on port ${env.PORT}`);
     });
 
-    injestionService.start();
+    await injestionService.start();
 
     const shutdown = async (): Promise<void> => {
       console.log("Shutting down SchemaMind...");

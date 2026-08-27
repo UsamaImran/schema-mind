@@ -1,5 +1,7 @@
 import express, { type Express } from "express";
 
+import schemaRoutes from "./routes/schema.routes.js";
+
 export class App {
   public readonly app: Express;
 
@@ -21,5 +23,7 @@ export class App {
         service: "schema-mind",
       });
     });
+
+    this.app.use("/api/schema", schemaRoutes);
   }
 }

@@ -1,4 +1,4 @@
-import { Schema, model, type InferSchemaType } from "mongoose";
+import { Schema, model, Types, type HydratedDocument } from "mongoose";
 
 const semanticUnitSchema = new Schema(
   {
@@ -52,9 +52,6 @@ const semanticUnitSchema = new Schema(
   },
 );
 
-/**
- * Prevent duplicate semantic units for the same table.
- */
 semanticUnitSchema.index(
   {
     sourceId: 1,
@@ -67,44 +64,58 @@ semanticUnitSchema.index(
   },
 );
 
-export type SemanticUnit = InferSchemaType<typeof semanticUnitSchema>;
+export interface SemanticUnit {
+  _id: Types.ObjectId;
 
-export const SemanticUnitModel = model(
+  sourceId: Types.ObjectId;
+
+  databaseName: string;
+
+  schemaName: string;
+
+  tableName: string;
+
+  type: "table";
+
+  content: string;
+
+  tokenCount: number;
+
+  embedding: number[];
+
+  createdAt: Date;
+
+  updatedAt: Date;
+}
+
+export type SemanticUnitDocument = HydratedDocument<SemanticUnit>;
+
+export const SemanticUnitModel = model<SemanticUnit>(
   "SemanticUnit",
   semanticUnitSchema,
   "semantic_units",
 );
 
-/**
- * MongoDB Vector Search Index
- */
-export async function ensureSemanticUnitVectorIndex(): Promise<void> {
-  const indexName = "semantic_units_vector_index";
-
-  const existingIndexes = await SemanticUnitModel.collection
-    .listSearchIndexes()
-    .toArray();
-
-  const exists = existingIndexes.some((index) => index.name === indexName);
-
-  if (exists) {
-    return;
-  }
-
-  await SemanticUnitModel.collection.createSearchIndex({
-    name: indexName,
-    type: "vectorSearch",
-    definition: {
-      fields: [
-        {
-          type: "vector",
-          path: "embedding",
-          numDimensions: 3072,
-          similarity: "cosine",
-        },
-      ],
-    },
-  });
-
-  console.log(`Created MongoDB vector index: ${indexName}`);
-}
+// MongoDB Vector Search index
+SemanticUnitModel.collection.createSearchIndex({
+  name: "semantic_units_vector_index",
+  type: "vectorSearch",
+  definition: {
+    fields: [
+      {
+        type: "vector",
+        path: "embedding",
+        numDimensions: 3072,
+        similarity: "cosine",
+      },
+      {
+        type: "filter",
+        path: "databaseName",
+      },
+      {
+        type: "filter",
+        path: "type",
+      },
+    ],
+  },
+});

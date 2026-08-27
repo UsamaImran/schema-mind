@@ -10,34 +10,15 @@ export class SchemaIngestionInitiator {
   private readonly ingestionService: IngestionService;
 
   constructor() {
-    /*
-     * Database adapters
-     */
     const postgresAdapter = new PostgreSQLAdapter();
-
-    /*
-     * Schema introspection
-     */
     const postgresIntrospector = new PostgreSQLSchemaIntrospector(
       postgresAdapter,
     );
-
-    /*
-     * Mongo repositories
-     */
     const semanticUnitRepository = new SemanticUnitRepository();
-
     const schemaSourceRepository = new SchemaSourceRepository();
-
-    /*
-     * AI infrastructure
-     */
     const tokenizerService = new TokenizerService();
     const embeddingService = new EmbeddingService();
 
-    /*
-     * Application service
-     */
     this.ingestionService = new IngestionService(
       postgresIntrospector,
       semanticUnitRepository,

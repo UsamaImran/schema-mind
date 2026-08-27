@@ -51,29 +51,33 @@ services:
     restart: unless-stopped
 
   mongodb:
-    image: mongo:8
+    image: mongodb/mongodb-atlas-local:latest
 
     container_name: schema-mind-mongodb
 
+    hostname: mongodb
+
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGODB_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGODB_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
 
     ports:
       - "${MONGO_PORT}:27017"
 
     volumes:
-      - mongodb_data:/data/db
-
-    healthcheck:
-      test:
-        ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - mongodb_atlas_data:/data/db
+      - mongodb_atlas_config:/data/configdb
+      - mongodb_atlas_mongot:/data/mongot
 
     restart: unless-stopped
 
 volumes:
   postgres_data:
+
+  # Existing mongo:8 data remains untouched.
   mongodb_data:
+
+  # New volumes specifically for Atlas Local.
+  mongodb_atlas_data:
+  mongodb_atlas_config:
+  mongodb_atlas_mongot:

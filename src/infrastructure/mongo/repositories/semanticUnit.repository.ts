@@ -8,6 +8,18 @@ export type SemanticUnitInput = Omit<
   "_id" | "createdAt" | "updatedAt"
 >;
 
+export interface SemanticSearchResult {
+  _id: SemanticUnit["_id"];
+  sourceId: SemanticUnit["sourceId"];
+  databaseName: SemanticUnit["databaseName"];
+  schemaName: SemanticUnit["schemaName"];
+  tableName: SemanticUnit["tableName"];
+  type: SemanticUnit["type"];
+  content: SemanticUnit["content"];
+  tokenCount: SemanticUnit["tokenCount"];
+  score: number;
+}
+
 export class SemanticUnitRepository {
   async upsert(unit: SemanticUnitInput): Promise<void> {
     await SemanticUnitModel.updateOne(
@@ -102,5 +114,42 @@ export class SemanticUnitRepository {
     ]);
 
     return unitCount === expectedTableCount && unitsWithoutEmbedding === 0;
+  }
+
+  async vectorSearch(
+    databaseName: string,
+    queryEmbedding: number[],
+    limit: number = 5,
+  ): Promise<SemanticSearchResult[]> {
+    return SemanticUnitModel.aggregate<SemanticSearchResult>([
+      {
+        $vectorSearch: {
+          index: "semantic_units_vector_index",
+          path: "embedding",
+          queryVector: queryEmbedding,
+          numCandidates: Math.max(limit * 10, 50),
+          limit,
+          filter: {
+            databaseName,
+            type: "table",
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          sourceId: 1,
+          databaseName: 1,
+          schemaName: 1,
+          tableName: 1,
+          type: 1,
+          content: 1,
+          tokenCount: 1,
+          score: {
+            $meta: "vectorSearchScore",
+          },
+        },
+      },
+    ]);
   }
 }
