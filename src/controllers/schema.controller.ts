@@ -11,7 +11,7 @@ export class SchemaController {
 
   retrieve = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { question, databaseName, limit } = req.body;
+      const { question, databaseName } = req.body;
 
       if (typeof question !== "string" || !question.trim()) {
         res.status(400).json({
@@ -27,23 +27,17 @@ export class SchemaController {
         return;
       }
 
-      const retrievalOptions =
-        typeof limit === "number" && Number.isFinite(limit) && limit > 0
-          ? { limit }
-          : {};
-
       const results = await this.schemaRetriever.retrieve(
         question,
         databaseName,
-        retrievalOptions,
       );
 
-      //   const sql = await this.sqlGenerator.generate(question, results);
+      const sql = await this.sqlGenerator.generate(question, results.final);
 
       res.status(200).json({
         question,
-        // sql,
-        results,
+        sql,
+        results: results.final,
       });
     } catch (error) {
       console.error("Schema retrieval failed:", error);
