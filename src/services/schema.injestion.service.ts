@@ -40,11 +40,6 @@ export class IngestionService {
     private readonly schemaGraphBuilder: SchemaGraphBuilder,
   ) {}
 
-  /**
-   * Called when the application starts.
-   *
-   * Determines whether the database schema needs to be ingested.
-   */
   async ingestIfRequired(): Promise<void> {
     console.log("Checking schema ingestion status...");
 
@@ -56,12 +51,6 @@ export class IngestionService {
       databaseSchema.databaseName,
     );
 
-    /*
-     * --------------------------------------------------
-     * First ingestion
-     * --------------------------------------------------
-     */
-
     if (!existingSource) {
       console.log("No existing schema source found. Starting ingestion.");
 
@@ -70,12 +59,6 @@ export class IngestionService {
       return;
     }
 
-    /*
-     * --------------------------------------------------
-     * Schema changed
-     * --------------------------------------------------
-     */
-
     if (existingSource.schemaFingerprint !== fingerprint) {
       console.log("Database schema has changed. Starting re-ingestion.");
 
@@ -83,12 +66,6 @@ export class IngestionService {
 
       return;
     }
-
-    /*
-     * --------------------------------------------------
-     * Check whether all ingestion representations exist
-     * --------------------------------------------------
-     */
 
     const tableCount = databaseSchema.schemas.reduce(
       (count, schema) => count + schema.tables.length,
@@ -104,10 +81,6 @@ export class IngestionService {
     const hasCompleteGraphIngestion =
       await this.schemaGraphRepository.existsForSource(existingSource._id);
 
-    /*
-     * Either semantic ingestion or graph ingestion
-     * may have been interrupted.
-     */
     if (!hasCompleteSemanticIngestion || !hasCompleteGraphIngestion) {
       console.log(
         "Schema is unchanged, but ingestion is incomplete. Resuming ingestion.",
@@ -123,17 +96,6 @@ export class IngestionService {
     );
   }
 
-  /**
-   * Executes the complete schema ingestion pipeline.
-   *
-   * The same DatabaseSchema is used to build:
-   *
-   * 1. Semantic representation
-   * 2. Graph representation
-   *
-   * Only the semantic representation requires
-   * tokenization + embeddings.
-   */
   private async ingest(
     databaseSchema: DatabaseSchema,
     fingerprint: string,
