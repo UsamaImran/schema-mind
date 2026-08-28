@@ -3,10 +3,9 @@ import { env } from "./config/env.js";
 import { MongoAdapter } from "./infrastructure/mongo/mongodb.adapter.js";
 import { PostgreSQLAdapter } from "./infrastructure/postgres/postgres.adapter.js";
 import { SchemaIngestionInitiator } from "./services/schema.injestion.initiator.js";
+import { PostgreSQLSchemaIntrospector } from "./infrastructure/postgres/postgres.schema-introspector.js";
 
 const application = new App();
-
-import { PostgreSQLSchemaIntrospector } from "./infrastructure/postgres/postgres.schema-introspector.js";
 
 const postgres = new PostgreSQLAdapter();
 const mongodb = new MongoAdapter();
