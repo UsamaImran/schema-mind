@@ -15,7 +15,6 @@ const mongodb = new MongoAdapter();
 const introspector = createSchemaIntrospector(dbAdapter);
 const injestionService = new SchemaIngestionInitiator(dbAdapter, introspector);
 
-// Set up executor factory for query execution
 const executorFactory = new ExecutorFactory();
 
 const bootstrap = async (): Promise<void> => {
@@ -27,10 +26,7 @@ const bootstrap = async (): Promise<void> => {
     const dialect = dbAdapter.getDialect();
     console.log(`DB: ${dbName} (${dialect}) connected!`);
 
-    // Register executor for this database
     if (dialect === "postgresql") {
-      // Need access to the pool — this is the tricky part
-      // Option: expose getPool() from PostgreSQLAdapter
       const pool = (dbAdapter as any).getPool?.() || createPostgresPool();
       executorFactory.register(dbName, dialect, new PostgresExecutor(pool));
     }
