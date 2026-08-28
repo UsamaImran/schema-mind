@@ -48,6 +48,7 @@ export class IngestionService {
 
     const existingSource = await this.schemaSourceRepository.findByDatabase(
       databaseSchema.databaseName,
+      databaseSchema.dialect,
     );
 
     if (!existingSource) {
@@ -108,7 +109,11 @@ export class IngestionService {
       databaseType: databaseSchema.dialect,
     });
 
-    await this.schemaSourceRepository.updateStatus(databaseName, "processing");
+    await this.schemaSourceRepository.updateStatus(
+      databaseName,
+      "processing",
+      databaseSchema.dialect,
+    );
 
     try {
       console.log("Building schema graph...");
@@ -185,13 +190,18 @@ export class IngestionService {
         tableCount,
         schemaCount,
         fingerprint,
+        databaseSchema.dialect,
       );
 
       console.log(
         `Schema ingestion completed successfully for ${databaseName}`,
       );
     } catch (error) {
-      await this.schemaSourceRepository.updateStatus(databaseName, "failed");
+      await this.schemaSourceRepository.updateStatus(
+        databaseName,
+        "failed",
+        databaseSchema.dialect,
+      );
 
       throw error;
     }

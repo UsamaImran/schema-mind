@@ -1,3 +1,4 @@
+import { SqlDialect } from "../../../modules/schema/schema.types.js";
 import {
   SchemaSource,
   SchemaSourceModel,
@@ -5,7 +6,7 @@ import {
 
 export type SchemaSourceInput = {
   databaseName: string;
-  databaseType?: SchemaSource["databaseType"];
+  databaseType?: SqlDialect;
 };
 
 export class SchemaSourceRepository {
@@ -43,7 +44,7 @@ export class SchemaSourceRepository {
 
   async findByDatabase(
     databaseName: string,
-    databaseType: SchemaSource["databaseType"],
+    databaseType: SqlDialect,
   ): Promise<SchemaSource | null> {
     return SchemaSourceModel.findOne({
       databaseName,
@@ -54,7 +55,7 @@ export class SchemaSourceRepository {
   async updateStatus(
     databaseName: string,
     status: SchemaSource["status"],
-    databaseType: SchemaSource["databaseType"],
+    databaseType: SqlDialect,
   ): Promise<void> {
     await SchemaSourceModel.updateOne(
       {
@@ -72,11 +73,12 @@ export class SchemaSourceRepository {
     tableCount: number,
     schemaCount: number,
     schemaFingerprint: string,
+    databaseType: SqlDialect,
   ): Promise<void> {
     await SchemaSourceModel.updateOne(
       {
         databaseName,
-        databaseType: "postgresql",
+        databaseType,
       },
       {
         $set: {

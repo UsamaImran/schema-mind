@@ -6,10 +6,12 @@ import { SchemaIngestionInitiator } from "./services/schema.injestion.initiator.
 
 const application = new App();
 
+import { PostgreSQLSchemaIntrospector } from "./infrastructure/postgres/postgres.schema-introspector.js";
+
 const postgres = new PostgreSQLAdapter();
 const mongodb = new MongoAdapter();
-
-const injestionService = new SchemaIngestionInitiator();
+const introspector = new PostgreSQLSchemaIntrospector(postgres);
+const injestionService = new SchemaIngestionInitiator(postgres, introspector);
 
 const bootstrap = async (): Promise<void> => {
   try {

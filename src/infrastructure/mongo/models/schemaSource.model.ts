@@ -65,11 +65,7 @@ export interface SchemaSource {
 
   databaseName: string;
 
-  databaseType: {
-    type: String;
-    enum: ["postgresql", "mysql", "sqlite", "mssql"];
-    required: true;
-  };
+  databaseType: "postgresql" | "mysql" | "sqlite" | "mssql";
 
   schemaCount: number;
 
