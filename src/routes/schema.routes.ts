@@ -25,7 +25,7 @@ const sqlGenerator = new SqlGenerator();
 const schemaController = new SchemaController(
   schemaRetriever,
   sqlGenerator,
-  executorFactory, // ← NEW
+  executorFactory,
 );
 
 router.post("/retrieve", schemaController.retrieve);

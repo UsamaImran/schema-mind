@@ -5,8 +5,6 @@ import { createDatabaseAdapter } from "./infrastructure/database.adapter.factory
 import { createSchemaIntrospector } from "./modules/schema/schema-introspector.factory.js";
 import { SchemaIngestionInitiator } from "./services/schema.injestion.initiator.js";
 import type { ISqlDatabaseAdapter } from "./interfaces/sql-database.adapter.js";
-import { ExecutorFactory } from "./modules/execution/executor.factory.js";
-import { PostgresExecutor } from "./modules/execution/postgres.executor.js";
 
 const application = new App();
 
@@ -14,8 +12,6 @@ const dbAdapter: ISqlDatabaseAdapter = createDatabaseAdapter();
 const mongodb = new MongoAdapter();
 const introspector = createSchemaIntrospector(dbAdapter);
 const injestionService = new SchemaIngestionInitiator(dbAdapter, introspector);
-
-const executorFactory = new ExecutorFactory();
 
 const bootstrap = async (): Promise<void> => {
   try {
@@ -25,11 +21,6 @@ const bootstrap = async (): Promise<void> => {
     const dbName = dbAdapter.getDatabaseName();
     const dialect = dbAdapter.getDialect();
     console.log(`DB: ${dbName} (${dialect}) connected!`);
-
-    if (dialect === "postgresql") {
-      const pool = (dbAdapter as any).getPool?.() || createPostgresPool();
-      executorFactory.register(dbName, dialect, new PostgresExecutor(pool));
-    }
 
     const server = application.app.listen(env.PORT, () => {
       console.log(`SchemaMind running on port ${env.PORT}`);
