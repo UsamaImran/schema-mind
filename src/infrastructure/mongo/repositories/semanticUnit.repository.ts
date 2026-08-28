@@ -1,3 +1,4 @@
+import { SqlDialect } from "../../../modules/schema/schema.types.js";
 import {
   SemanticUnit,
   SemanticUnitModel,
@@ -18,6 +19,7 @@ export interface SemanticSearchResult {
   content: SemanticUnit["content"];
   tokenCount: SemanticUnit["tokenCount"];
   score: number;
+  dialect: SqlDialect;
 }
 
 export class SemanticUnitRepository {

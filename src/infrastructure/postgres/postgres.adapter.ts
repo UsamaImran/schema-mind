@@ -1,7 +1,7 @@
 import { Pool, type QueryResultRow } from "pg";
-
 import { env } from "../../config/env.js";
 import type { ISqlDatabaseAdapter } from "../../interfaces/sql-database.adapter.js";
+import type { SqlDialect } from "../../modules/schema/schema.types.js";
 
 export class PostgreSQLAdapter implements ISqlDatabaseAdapter {
   private readonly pool: Pool;
@@ -18,7 +18,6 @@ export class PostgreSQLAdapter implements ISqlDatabaseAdapter {
 
   async connect(): Promise<void> {
     const client = await this.pool.connect();
-
     try {
       await client.query("SELECT 1");
     } finally {
@@ -34,12 +33,15 @@ export class PostgreSQLAdapter implements ISqlDatabaseAdapter {
     return env.POSTGRES_DATABASE;
   }
 
+  getDialect(): SqlDialect {
+    return "postgresql";
+  }
+
   async query<T extends QueryResultRow = QueryResultRow>(
     text: string,
     values?: unknown[],
   ): Promise<T[]> {
     const result = await this.pool.query<T>(text, values);
-
     return result.rows;
   }
 }

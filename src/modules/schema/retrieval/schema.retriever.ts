@@ -345,6 +345,7 @@ export class SchemaRetriever {
         finalScore: score,
 
         graphMatched: false,
+        dialect: result.dialect ?? "postgresql",
       });
     });
 

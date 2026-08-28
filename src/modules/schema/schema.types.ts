@@ -1,7 +1,10 @@
 export interface DatabaseSchema {
   databaseName: string;
+  dialect: SqlDialect;
   schemas: SchemaDefinition[];
 }
+
+export type SqlDialect = "postgresql" | "mysql" | "sqlite" | "mssql";
 
 export interface SchemaDefinition {
   name: string;

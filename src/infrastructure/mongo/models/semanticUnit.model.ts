@@ -1,4 +1,5 @@
 import { Schema, model, Types, type HydratedDocument } from "mongoose";
+import { SqlDialect } from "../../../modules/schema/schema.types.js";
 
 const semanticUnitSchema = new Schema(
   {
@@ -86,6 +87,7 @@ export interface SemanticUnit {
   createdAt: Date;
 
   updatedAt: Date;
+  dialect: SqlDialect;
 }
 
 export type SemanticUnitDocument = HydratedDocument<SemanticUnit>;

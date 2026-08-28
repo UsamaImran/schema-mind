@@ -23,6 +23,9 @@ const envSchema = z.object({
   MONGO_DATABASE: z.string().min(1),
 
   GEMINI_API_KEY: z.string().min(1),
+
+  EXECUTOR_MAX_ROWS: z.coerce.number().int().positive().default(100),
+  EVALUATION_THRESHOLD: z.coerce.number().int().min(0).max(100).default(70),
 });
 
 export const env = envSchema.parse(process.env);

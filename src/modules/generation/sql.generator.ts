@@ -1,10 +1,12 @@
 import { gemini, GEMINI_TEXT_MODEL } from "../../config/gemini.js";
 import type { SemanticSearchResult } from "../../infrastructure/mongo/repositories/semanticUnit.repository.js";
+import type { SqlDialect } from "../schema/schema.types.js";
 
 export class SqlGenerator {
   async generate(
     question: string,
     semanticUnits: SemanticSearchResult[],
+    dialect: SqlDialect = "postgresql", // ← NEW
   ): Promise<string> {
     if (semanticUnits.length === 0) {
       throw new Error("No schema context available for SQL generation");
@@ -15,7 +17,7 @@ export class SqlGenerator {
       .join("\n\n---\n\n");
 
     const prompt = `
-You are an expert PostgreSQL SQL generator.
+You are an expert ${dialect} SQL generator.
 
 Generate a SQL query that answers the user's question using ONLY
 the database schema provided below.
@@ -27,7 +29,7 @@ DATABASE SCHEMA:
 ${schemaContext}
 
 RULES:
-- Generate PostgreSQL-compatible SQL.
+- Generate ${dialect}-compatible SQL.
 - Use only tables and columns present in the schema.
 - Use the provided foreign keys to determine relationships.
 - Do not invent tables, columns, or relationships.

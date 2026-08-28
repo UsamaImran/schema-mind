@@ -23,6 +23,7 @@ export class PostgreSQLSchemaIntrospector implements ISchemaIntrospector {
 
     return {
       databaseName: this.database.getDatabaseName(),
+      dialect: this.database.getDialect(),
       schemas: this.buildSchemas(
         tables,
         columns,

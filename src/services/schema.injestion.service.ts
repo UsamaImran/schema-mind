@@ -149,6 +149,7 @@ export class IngestionService {
             content,
             tokenCount,
             embedding,
+            dialect: databaseSchema.dialect,
           });
         }
       }

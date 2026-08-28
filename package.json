@@ -17,6 +17,7 @@
     "express": "^5.1.0",
     "mongodb": "^7.6.0",
     "mongoose": "^9.9.4",
+    "node-sql-parser": "^5.4.0",
     "pg": "^8.23.0",
     "zod": "^4.0.0"
   },
