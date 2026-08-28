@@ -9,8 +9,6 @@ import {
 
 import { SchemaGraphRepository } from "../infrastructure/mongo/repositories/schemaGraph.repository.js";
 
-import { PostgreSQLSchemaIntrospector } from "../infrastructure/postgres/postgres.schema-introspector.js";
-
 import { TokenizerService } from "../infrastructure/tokenization/tokenizer.service.js";
 
 import { SchemaGraphBuilder } from "../modules/schema/graph/schema-graph.builder.js";
@@ -22,10 +20,11 @@ import {
 } from "../modules/schema/schema.types.js";
 
 import { createSchemaFingerprint } from "../shared/utils/schema-fingerprint.js";
+import { ISchemaIntrospector } from "../modules/schema/schema.intropector.js";
 
 export class IngestionService {
   constructor(
-    private readonly postgresIntrospector: PostgreSQLSchemaIntrospector,
+    private readonly schemaIntrospector: ISchemaIntrospector,
 
     private readonly semanticUnitRepository: SemanticUnitRepository,
 
@@ -43,7 +42,7 @@ export class IngestionService {
   async ingestIfRequired(): Promise<void> {
     console.log("Checking schema ingestion status...");
 
-    const databaseSchema = await this.postgresIntrospector.getSchema();
+    const databaseSchema = await this.schemaIntrospector.getSchema();
 
     const fingerprint = createSchemaFingerprint(databaseSchema);
 
@@ -106,7 +105,7 @@ export class IngestionService {
 
     const schemaSource = await this.schemaSourceRepository.upsert({
       databaseName,
-      databaseType: "postgresql",
+      databaseType: databaseSchema.dialect,
     });
 
     await this.schemaSourceRepository.updateStatus(databaseName, "processing");

@@ -26,6 +26,7 @@ const envSchema = z.object({
 
   EXECUTOR_MAX_ROWS: z.coerce.number().int().positive().default(100),
   EVALUATION_THRESHOLD: z.coerce.number().int().min(0).max(100).default(70),
+  DATABASE_DIALECT: z.string().min(1),
 });
 
 export const env = envSchema.parse(process.env);

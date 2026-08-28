@@ -9,7 +9,7 @@ const schemaSourceSchema = new Schema(
 
     databaseType: {
       type: String,
-      enum: ["postgresql"],
+      enum: ["postgresql", "mysql", "sqlite", "mssql"],
       required: true,
     },
 
@@ -65,7 +65,11 @@ export interface SchemaSource {
 
   databaseName: string;
 
-  databaseType: "postgresql";
+  databaseType: {
+    type: String;
+    enum: ["postgresql", "mysql", "sqlite", "mssql"];
+    required: true;
+  };
 
   schemaCount: number;
 

@@ -47,6 +47,11 @@ const semanticUnitSchema = new Schema(
       type: [Number],
       required: true,
     },
+    dialect: {
+      type: String,
+      enum: ["postgresql", "mysql", "sqlite", "mssql"],
+      required: true,
+    },
   },
   {
     timestamps: true,

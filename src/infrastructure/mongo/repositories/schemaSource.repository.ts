@@ -23,6 +23,7 @@ export class SchemaSourceRepository {
           databaseType,
           schemaCount: 0,
           tableCount: 0,
+
           status: "pending",
         },
       },
@@ -42,7 +43,7 @@ export class SchemaSourceRepository {
 
   async findByDatabase(
     databaseName: string,
-    databaseType: SchemaSource["databaseType"] = "postgresql",
+    databaseType: SchemaSource["databaseType"],
   ): Promise<SchemaSource | null> {
     return SchemaSourceModel.findOne({
       databaseName,
@@ -53,7 +54,7 @@ export class SchemaSourceRepository {
   async updateStatus(
     databaseName: string,
     status: SchemaSource["status"],
-    databaseType: SchemaSource["databaseType"] = "postgresql",
+    databaseType: SchemaSource["databaseType"],
   ): Promise<void> {
     await SchemaSourceModel.updateOne(
       {

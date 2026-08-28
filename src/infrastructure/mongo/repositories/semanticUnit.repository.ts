@@ -147,6 +147,7 @@ export class SemanticUnitRepository {
           type: 1,
           content: 1,
           tokenCount: 1,
+          dialect: 1,
           score: {
             $meta: "vectorSearchScore",
           },
@@ -205,6 +206,7 @@ export class SemanticUnitRepository {
           type: 1,
           content: 1,
           tokenCount: 1,
+          dialect: 1,
           score: {
             $meta: "searchScore",
           },
