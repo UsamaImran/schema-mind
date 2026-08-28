@@ -9,11 +9,19 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
 
   // PostgreSQL
+  DATABASE_DIALECT: z
+    .enum(["postgresql", "mysql", "sqlite", "mssql"])
+    .default("postgresql"),
+
+  // Keep existing POSTGRES_* for now (backward compat)
   POSTGRES_HOST: z.string().min(1),
   POSTGRES_PORT: z.coerce.number().int().positive(),
   POSTGRES_DATABASE: z.string().min(1),
   POSTGRES_USER: z.string().min(1),
   POSTGRES_PASSWORD: z.string(),
+
+  // Future: generic DB connection string
+  //DATABASE_URL: z.string().optional(),
 
   // MongoDB
   MONGO_HOST: z.string().min(1),
@@ -26,7 +34,6 @@ const envSchema = z.object({
 
   EXECUTOR_MAX_ROWS: z.coerce.number().int().positive().default(100),
   EVALUATION_THRESHOLD: z.coerce.number().int().min(0).max(100).default(70),
-  DATABASE_DIALECT: z.string().min(1),
 });
 
 export const env = envSchema.parse(process.env);
