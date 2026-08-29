@@ -15,18 +15,18 @@ const envSchema = z
       .default("postgresql"),
 
     // PostgreSQL
-    POSTGRES_HOST: z.string().optional(),
-    POSTGRES_PORT: z.coerce.number().int().positive().optional(),
+    POSTGRES_HOST: z.string().min(1),
+    POSTGRES_PORT: z.coerce.number().int().positive(),
     POSTGRES_DATABASE: z.string().min(1),
-    POSTGRES_USER: z.string().optional(),
-    POSTGRES_PASSWORD: z.string().optional(),
+    POSTGRES_USER: z.string().min(1),
+    POSTGRES_PASSWORD: z.string(),
 
     // MySQL
-    MYSQL_HOST: z.string().optional(),
-    MYSQL_PORT: z.coerce.number().int().positive().optional(),
+    MYSQL_HOST: z.string().min(1),
+    MYSQL_PORT: z.coerce.number().int().positive(),
     MYSQL_DATABASE: z.string().min(1),
-    MYSQL_USER: z.string().optional(),
-    MYSQL_PASSWORD: z.string().optional(),
+    MYSQL_USER: z.string().min(1),
+    MYSQL_PASSWORD: z.string(),
 
     // MongoDB
     MONGO_HOST: z.string().min(1),

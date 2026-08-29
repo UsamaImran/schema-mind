@@ -8,13 +8,6 @@ import type {
   TableDefinition,
 } from "../../modules/schema/schema.types.js";
 
-/**
- * MySQL Schema Introspector
- *
- * Introspects a live MySQL database using information_schema.
- * MySQL uses a single-database-per-connection model, so we treat
- * the current database as the single schema (similar to Postgres public schema).
- */
 export class MySQLSchemaIntrospector implements ISchemaIntrospector {
   constructor(private readonly database: ISqlDatabaseAdapter) {}
 
@@ -201,9 +194,6 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
 
       if (!table) continue;
 
-      const extra = String(row.extra ?? "");
-      const isAutoIncrement = extra.includes("auto_increment");
-
       table.columns.push({
         name: String(row.column_name),
         dataType: String(row.data_type),
@@ -276,7 +266,11 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
 
     // Attach aggregated indexes to tables
     for (const [schemaTableKey, tableIndexes] of indexMap.entries()) {
-      const [schemaName, tableName] = schemaTableKey.split(".");
+      const parts = schemaTableKey.split(".");
+      if (parts.length < 2) continue;
+
+      const schemaName = parts[0]!;
+      const tableName = parts[1]!;
       const table = this.findTable(schemaMap, schemaName, tableName);
 
       if (!table) continue;

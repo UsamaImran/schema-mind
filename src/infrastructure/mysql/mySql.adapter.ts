@@ -7,11 +7,12 @@ export class MySQLAdapter implements ISqlDatabaseAdapter {
   private readonly pool: Pool;
 
   constructor() {
+    // Zod schema in env.ts already validates these are defined when dialect=mysql
     this.pool = createPool({
-      host: env.MYSQL_HOST,
-      port: env.MYSQL_PORT,
-      database: env.MYSQL_DATABASE,
-      user: env.MYSQL_USER,
+      host: env.MYSQL_HOST!,
+      port: env.MYSQL_PORT!,
+      database: env.MYSQL_DATABASE!,
+      user: env.MYSQL_USER!,
       password: env.MYSQL_PASSWORD,
       waitForConnections: true,
       connectionLimit: 10,
@@ -33,7 +34,7 @@ export class MySQLAdapter implements ISqlDatabaseAdapter {
   }
 
   getDatabaseName(): string {
-    return env.MYSQL_DATABASE;
+    return env.MYSQL_DATABASE!;
   }
 
   getDialect(): SqlDialect {
