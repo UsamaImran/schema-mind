@@ -1,8 +1,8 @@
-import { Parser } from "node-sql-parser";
+import Parser from "node-sql-parser";
 import type { CheckResult, EvaluationInput } from "./evaluation.types.js";
 
 export class StructuralEvaluator {
-  private parser = new Parser();
+  private parser = new Parser.Parser();
 
   evaluate(input: EvaluationInput): CheckResult {
     const { sql, dialect, schemaContext } = input;
@@ -64,16 +64,42 @@ export class StructuralEvaluator {
 
   private extractTables(ast: any): string[] {
     const tables: string[] = [];
+
     const walk = (node: any) => {
       if (!node || typeof node !== "object") return;
-      if (node.table) tables.push(node.table);
+
+      // FROM / JOIN table sources
+      if (node.table && typeof node.table === "string") {
+        const realName =
+          node.name && typeof node.name === "object" && node.name.name
+            ? node.name.name
+            : node.table;
+        tables.push(realName);
+      }
+
+      // Recurse into from/join structures
       if (node.from) {
         const sources = Array.isArray(node.from) ? node.from : [node.from];
         for (const src of sources) walk(src);
       }
-      for (const key of Object.keys(node)) walk(node[key]);
+
+      for (const key of Object.keys(node)) {
+        // Skip clauses that contain aliases, not table definitions
+        if (
+          key === "on" ||
+          key === "columns" ||
+          key === "where" ||
+          key === "orderby" ||
+          key === "groupby"
+        )
+          continue;
+        walk(node[key]);
+      }
     };
-    walk(ast);
+
+    const statements = Array.isArray(ast) ? ast : [ast];
+    for (const stmt of statements) walk(stmt);
+
     return [...new Set(tables)];
   }
 

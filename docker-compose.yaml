@@ -14,6 +14,10 @@ services:
 
     volumes:
       - ./src:/app/src
+      - /app/node_modules # <-- CRITICAL: preserves container's installed deps
+
+    # Override for hot-reload development
+    command: npm run dev
 
     depends_on:
       postgres:
@@ -73,11 +77,6 @@ services:
 
 volumes:
   postgres_data:
-
-  # Existing mongo:8 data remains untouched.
-  mongodb_data:
-
-  # New volumes specifically for Atlas Local.
   mongodb_atlas_data:
   mongodb_atlas_config:
   mongodb_atlas_mongot:
