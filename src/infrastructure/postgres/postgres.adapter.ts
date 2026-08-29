@@ -8,11 +8,11 @@ export class PostgreSQLAdapter implements ISqlDatabaseAdapter {
 
   constructor() {
     this.pool = new Pool({
-      host: env.POSTGRES_HOST,
-      port: env.POSTGRES_PORT,
-      database: env.POSTGRES_DATABASE,
-      user: env.POSTGRES_USER,
-      password: env.POSTGRES_PASSWORD,
+      host: env.DB_HOST,
+      port: env.DB_PORT,
+      database: env.DB_NAME,
+      user: env.DB_USER,
+      password: env.DB_PASSWORD,
     });
   }
 
@@ -30,7 +30,7 @@ export class PostgreSQLAdapter implements ISqlDatabaseAdapter {
   }
 
   getDatabaseName(): string {
-    return env.POSTGRES_DATABASE;
+    return env.DB_NAME;
   }
 
   getDialect(): SqlDialect {
