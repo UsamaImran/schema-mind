@@ -26,6 +26,7 @@ const envSchema = z.object({
   MONGO_ROOT_USERNAME: z.string().min(1),
   MONGO_ROOT_PASSWORD: z.string().min(1),
   MONGO_DATABASE: z.string().min(1),
+  MONGO_URI: z.string().min(1),
 
   GEMINI_API_KEY: z.string().min(1),
 

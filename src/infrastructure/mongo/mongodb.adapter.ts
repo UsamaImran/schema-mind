@@ -3,10 +3,11 @@ import mongoose from "mongoose";
 import { SchemaGraphModel } from "./models/schemaGraph.model.js";
 import { SchemaSourceModel } from "./models/schemaSource.model.js";
 import { SemanticUnitModel } from "./models/semanticUnit.model.js";
+import { env } from "../../config/env.js";
 
 export class MongoAdapter {
   async connect(): Promise<void> {
-    const uri = process.env.MONGO_URI;
+    const uri = env.MONGO_URI;
 
     if (!uri) {
       throw new Error("MONGO_URI is not defined");
