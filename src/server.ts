@@ -4,9 +4,10 @@ import { MongoAdapter } from "./infrastructure/mongo/mongodb.adapter.js";
 import { createDatabaseAdapter } from "./infrastructure/database.adapter.factory.js";
 import { createSchemaIntrospector } from "./modules/schema/schema-introspector.factory.js";
 import { SchemaIngestionInitiator } from "./services/schema.injestion.initiator.js";
-import type { ISqlDatabaseAdapter } from "./interfaces/sql-database.adapter.js";
+import { ExecutorFactory } from "./modules/execution/executor.factory.js";
 
-const application = new App();
+import type { ISqlDatabaseAdapter } from "./interfaces/sql-database.adapter.js";
+import { registerDialects } from "./modules/execution/dialect.register.js";
 
 const dbAdapter: ISqlDatabaseAdapter = createDatabaseAdapter();
 const mongodb = new MongoAdapter();
@@ -21,6 +22,11 @@ const bootstrap = async (): Promise<void> => {
     const dbName = dbAdapter.getDatabaseName();
     const dialect = dbAdapter.getDialect();
     console.log(`DB: ${dbName} (${dialect}) connected!`);
+
+    const executorFactory = new ExecutorFactory();
+    registerDialects(executorFactory, dbAdapter);
+
+    const application = new App(executorFactory);
 
     const server = application.app.listen(env.PORT, () => {
       console.log(`SchemaMind running on port ${env.PORT}`);

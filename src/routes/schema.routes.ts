@@ -7,27 +7,28 @@ import { SqlGenerator } from "../modules/generation/sql.generator.js";
 import { SchemaGraphRepository } from "../infrastructure/mongo/repositories/schemaGraph.repository.js";
 import { ExecutorFactory } from "../modules/execution/executor.factory.js";
 
-const router = Router();
+export default function createSchemaRoutes(executorFactory?: ExecutorFactory) {
+  const router = Router();
 
-const embeddingService = new EmbeddingService();
-const semanticUnitRepository = new SemanticUnitRepository();
-const schemaGraphRepository = new SchemaGraphRepository();
-const executorFactory = new ExecutorFactory();
+  const embeddingService = new EmbeddingService();
+  const semanticUnitRepository = new SemanticUnitRepository();
+  const schemaGraphRepository = new SchemaGraphRepository();
 
-const schemaRetriever = new SchemaRetriever(
-  embeddingService,
-  semanticUnitRepository,
-  schemaGraphRepository,
-);
+  const schemaRetriever = new SchemaRetriever(
+    embeddingService,
+    semanticUnitRepository,
+    schemaGraphRepository,
+  );
 
-const sqlGenerator = new SqlGenerator();
+  const sqlGenerator = new SqlGenerator();
 
-const schemaController = new SchemaController(
-  schemaRetriever,
-  sqlGenerator,
-  executorFactory,
-);
+  const schemaController = new SchemaController(
+    schemaRetriever,
+    sqlGenerator,
+    executorFactory ?? new ExecutorFactory(),
+  );
 
-router.post("/retrieve", schemaController.retrieve);
+  router.post("/retrieve", schemaController.retrieve);
 
-export default router;
+  return router;
+}

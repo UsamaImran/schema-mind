@@ -10,4 +10,5 @@ export interface ISqlDatabaseAdapter {
     text: string,
     values?: unknown[],
   ): Promise<T[]>;
+  getPool(): unknown;
 }

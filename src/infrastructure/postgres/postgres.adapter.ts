@@ -44,4 +44,8 @@ export class PostgreSQLAdapter implements ISqlDatabaseAdapter {
     const result = await this.pool.query<T>(text, values);
     return result.rows;
   }
+
+  getPool(): Pool {
+    return this.pool;
+  }
 }
