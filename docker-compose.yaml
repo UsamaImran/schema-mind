@@ -14,11 +14,7 @@ services:
       - DB_NAME=${DB_NAME:-schema_mind}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - MONGO_HOST=${MONGO_HOST:-mongodb}
-      - MONGO_PORT=${MONGO_PORT:-27017}
-      - MONGO_ROOT_USERNAME=${MONGO_ROOT_USERNAME:-root}
-      - MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-mongo}
-      - MONGO_DATABASE=${MONGO_DATABASE:-schema_mind}
+      - MONGO_URI=${MONGO_URI}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       postgres:
@@ -70,10 +66,10 @@ services:
   mongodb:
     image: mongodb/mongodb-atlas-local:latest
     environment:
-      MONGODB_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
-      MONGODB_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-mongo}
+      MONGODB_INITDB_ROOT_USERNAME: root
+      MONGODB_INITDB_ROOT_PASSWORD: mongo
     ports:
-      - "${MONGO_PORT:-27017}:27017"
+      - "27017:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:

@@ -9,10 +9,6 @@ export class MongoAdapter {
   async connect(): Promise<void> {
     const uri = env.MONGO_URI;
 
-    if (!uri) {
-      throw new Error("MONGO_URI is not defined");
-    }
-
     try {
       await mongoose.connect(uri);
 
@@ -35,31 +31,13 @@ export class MongoAdapter {
       throw new Error("MongoDB must be connected before initialization");
     }
 
-    /*
-     * ==================================================
-     * COLLECTIONS
-     * ==================================================
-     */
-
     await this.ensureCollection(SchemaSourceModel);
     await this.ensureCollection(SemanticUnitModel);
     await this.ensureCollection(SchemaGraphModel);
 
-    /*
-     * ==================================================
-     * MONGOOSE INDEXES
-     * ==================================================
-     */
-
     await SchemaSourceModel.createIndexes();
     await SemanticUnitModel.createIndexes();
     await SchemaGraphModel.createIndexes();
-
-    /*
-     * ==================================================
-     * ATLAS SEARCH INDEXES
-     * ==================================================
-     */
 
     await this.initializeSemanticSearchIndexes();
     await this.initializeGraphSearchIndexes();
