@@ -6,14 +6,11 @@ import { createSchemaIntrospector } from "./modules/schema/schema-introspector.f
 import { SchemaIngestionInitiator } from "./services/schema.injestion.initiator.js";
 import { ExecutorFactory } from "./modules/execution/executor.factory.js";
 
-import type {
-  ISchemaChangeListener,
-  ISqlDatabaseAdapter,
-} from "./interfaces/sql-database.adapter.js";
+import type { ISchemaChangeListener } from "./interfaces/sql-database.adapter.js";
 
 import { registerDialects } from "./modules/execution/dialect.register.js";
 
-const dbAdapter: ISqlDatabaseAdapter = createDatabaseAdapter();
+const dbAdapter = createDatabaseAdapter();
 const mongodb = new MongoAdapter();
 const introspector = createSchemaIntrospector(dbAdapter);
 const injestionService = new SchemaIngestionInitiator(dbAdapter, introspector);

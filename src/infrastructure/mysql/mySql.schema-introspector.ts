@@ -151,12 +151,9 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
      * ---------------------------------------------------------
      * Build tables
      * ---------------------------------------------------------
-     *
-     * For MySQL, the currently selected database is our single
-     * schema namespace.
      */
     for (const row of tableRows) {
-      const tableName = String(row.table_name);
+      const tableName = String(row.TABLE_NAME);
 
       tables.set(tableName, {
         name: tableName,
@@ -173,17 +170,17 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
      * ---------------------------------------------------------
      */
     for (const row of columnRows) {
-      const tableName = String(row.table_name);
+      const tableName = String(row.TABLE_NAME);
       const table = tables.get(tableName);
 
       if (!table) continue;
 
       table.columns.push({
-        name: String(row.column_name),
-        dataType: String(row.data_type),
-        nullable: row.is_nullable === "YES",
+        name: String(row.COLUMN_NAME),
+        dataType: String(row.DATA_TYPE),
+        nullable: row.IS_NULLABLE === "YES",
         defaultValue:
-          row.column_default === null ? null : String(row.column_default),
+          row.COLUMN_DEFAULT === null ? null : String(row.COLUMN_DEFAULT),
       });
     }
 
@@ -191,17 +188,14 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
      * ---------------------------------------------------------
      * Add primary keys
      * ---------------------------------------------------------
-     *
-     * Keep the order returned by ordinal_position because
-     * composite primary keys are order-sensitive.
      */
     for (const row of primaryKeyRows) {
-      const tableName = String(row.table_name);
+      const tableName = String(row.TABLE_NAME);
       const table = tables.get(tableName);
 
       if (!table) continue;
 
-      table.primaryKeys.push(String(row.column_name));
+      table.primaryKeys.push(String(row.COLUMN_NAME));
     }
 
     /*
@@ -212,19 +206,16 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
     const databaseName = this.database.getDatabaseName();
 
     for (const row of foreignKeyRows) {
-      const tableName = String(row.table_name);
+      const tableName = String(row.TABLE_NAME);
       const table = tables.get(tableName);
 
       if (!table) continue;
 
       const foreignKey: ForeignKeyDefinition = {
-        columnName: String(row.column_name),
-
-        referencedSchema: String(row.referenced_table_schema ?? databaseName),
-
-        referencedTable: String(row.referenced_table_name),
-
-        referencedColumn: String(row.referenced_column_name),
+        columnName: String(row.COLUMN_NAME),
+        referencedSchema: String(row.REFERENCED_TABLE_SCHEMA ?? databaseName),
+        referencedTable: String(row.REFERENCED_TABLE_NAME),
+        referencedColumn: String(row.REFERENCED_COLUMN_NAME),
       };
 
       table.foreignKeys.push(foreignKey);
@@ -234,20 +225,6 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
      * ---------------------------------------------------------
      * Aggregate indexes
      * ---------------------------------------------------------
-     *
-     * information_schema.statistics returns:
-     *
-     *   index_1 | column_a
-     *   index_1 | column_b
-     *   index_1 | column_c
-     *
-     * for a composite index.
-     *
-     * We therefore aggregate by:
-     *
-     *   table + index
-     *
-     * while preserving seq_in_index ordering.
      */
     const indexMap = new Map<
       string,
@@ -261,10 +238,10 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
     >();
 
     for (const row of indexRows) {
-      const tableName = String(row.table_name);
-      const indexName = String(row.index_name);
-      const columnName = String(row.column_name);
-      const nonUnique = Number(row.non_unique);
+      const tableName = String(row.TABLE_NAME);
+      const indexName = String(row.INDEX_NAME);
+      const columnName = String(row.COLUMN_NAME);
+      const nonUnique = Number(row.NON_UNIQUE);
 
       if (!indexMap.has(tableName)) {
         indexMap.set(tableName, new Map());
@@ -286,9 +263,6 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
      * ---------------------------------------------------------
      * Attach indexes to tables
      * ---------------------------------------------------------
-     *
-     * PRIMARY is identified directly from MySQL's index_name.
-     * We do NOT infer primary indexes by comparing columns.
      */
     for (const [tableName, tableIndexes] of indexMap.entries()) {
       const table = tables.get(tableName);
