@@ -2,6 +2,7 @@ import { Pool, type QueryResultRow } from "pg";
 import { env } from "../../config/env.js";
 import type { ISqlDatabaseAdapter } from "../../interfaces/sql-database.adapter.js";
 import type { SqlDialect } from "../../modules/schema/schema.types.js";
+import { PostgresSchemaChangeListener } from "./postgres.schema-change.listener.js";
 
 export class PostgreSQLAdapter implements ISqlDatabaseAdapter {
   private readonly pool: Pool;
@@ -47,5 +48,9 @@ export class PostgreSQLAdapter implements ISqlDatabaseAdapter {
 
   getPool(): Pool {
     return this.pool;
+  }
+
+  createSchemaChangeListener(onChange: () => Promise<void>) {
+    return new PostgresSchemaChangeListener(this, onChange);
   }
 }

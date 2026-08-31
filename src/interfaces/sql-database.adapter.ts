@@ -11,4 +11,13 @@ export interface ISqlDatabaseAdapter {
     values?: unknown[],
   ): Promise<T[]>;
   getPool(): unknown;
+
+  createSchemaChangeListener(
+    onChange: () => Promise<void>,
+  ): ISchemaChangeListener;
+}
+
+export interface ISchemaChangeListener {
+  start(): Promise<void>;
+  stop(): Promise<void>;
 }

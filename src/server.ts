@@ -6,13 +6,19 @@ import { createSchemaIntrospector } from "./modules/schema/schema-introspector.f
 import { SchemaIngestionInitiator } from "./services/schema.injestion.initiator.js";
 import { ExecutorFactory } from "./modules/execution/executor.factory.js";
 
-import type { ISqlDatabaseAdapter } from "./interfaces/sql-database.adapter.js";
+import type {
+  ISchemaChangeListener,
+  ISqlDatabaseAdapter,
+} from "./interfaces/sql-database.adapter.js";
+
 import { registerDialects } from "./modules/execution/dialect.register.js";
 
 const dbAdapter: ISqlDatabaseAdapter = createDatabaseAdapter();
 const mongodb = new MongoAdapter();
 const introspector = createSchemaIntrospector(dbAdapter);
 const injestionService = new SchemaIngestionInitiator(dbAdapter, introspector);
+
+let schemaChangeListener: ISchemaChangeListener | undefined;
 
 const bootstrap = async (): Promise<void> => {
   try {
@@ -32,10 +38,31 @@ const bootstrap = async (): Promise<void> => {
       console.log(`SchemaMind running on port ${env.PORT}`);
     });
 
+    // Initial ingestion
     await injestionService.start();
+
+    // Start schema change listener for auto re-ingestion
+    schemaChangeListener = dbAdapter.createSchemaChangeListener(async () => {
+      console.log(`[${dialect}] Schema change detected, re-ingesting...`);
+      try {
+        await injestionService.start();
+        console.log(`[${dialect}] Re-ingestion completed.`);
+      } catch (err) {
+        console.error(`[${dialect}] Re-ingestion failed:`, err);
+      }
+    });
+
+    await schemaChangeListener.start();
+    console.log(`[${dialect}] Schema change listener active.`);
 
     const shutdown = async (): Promise<void> => {
       console.log("Shutting down SchemaMind...");
+
+      // Stop listener first to avoid reconnection attempts during shutdown
+      if (schemaChangeListener) {
+        await schemaChangeListener.stop();
+        console.log(`[${dialect}] Schema change listener stopped.`);
+      }
 
       server.close(async () => {
         await dbAdapter.disconnect();
@@ -48,12 +75,10 @@ const bootstrap = async (): Promise<void> => {
     process.on("SIGINT", shutdown);
   } catch (error) {
     console.error("Failed to start SchemaMind:", error);
+    await schemaChangeListener?.stop();
     await dbAdapter.disconnect();
     process.exit(1);
   }
 };
 
 bootstrap();
-function createPostgresPool(): any {
-  throw new Error("Function not implemented.");
-}

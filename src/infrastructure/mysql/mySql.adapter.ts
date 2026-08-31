@@ -2,6 +2,7 @@ import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { env } from "../../config/env.js";
 import type { ISqlDatabaseAdapter } from "../../interfaces/sql-database.adapter.js";
 import type { SqlDialect } from "../../modules/schema/schema.types.js";
+import { MySQLSchemaChangeListener } from "./mysql.schema-change.listener.js";
 
 export class MySQLAdapter implements ISqlDatabaseAdapter {
   private readonly pool: Pool;
@@ -50,5 +51,9 @@ export class MySQLAdapter implements ISqlDatabaseAdapter {
 
   getPool(): Pool {
     return this.pool;
+  }
+
+  createSchemaChangeListener(onChange: () => Promise<void>) {
+    return new MySQLSchemaChangeListener(this, onChange);
   }
 }
