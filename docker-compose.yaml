@@ -79,7 +79,7 @@ services:
 
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mysql}
-      MYSQL_DATABASE: ${DB_NAME:-schema_mind}
+      MYSQL_DATABASE: ${DB_NAME:-schema-mind-db}
       MYSQL_USER: ${DB_USER:-schema_mind}
       MYSQL_PASSWORD: ${DB_PASSWORD:-schema_mind}
 

@@ -34,6 +34,11 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
     };
   }
 
+  /**
+   * MySQL treats the selected database as the schema namespace.
+   *
+   * DATABASE() returns the database currently selected by the connection.
+   */
   private async getTables(): Promise<Record<string, unknown>[]> {
     return this.database.query(`
       SELECT
@@ -41,14 +46,8 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
         table_name
       FROM information_schema.tables
       WHERE table_type = 'BASE TABLE'
-        AND table_schema NOT IN (
-          'mysql',
-          'information_schema',
-          'performance_schema',
-          'sys'
-        )
+        AND table_schema = DATABASE()
       ORDER BY
-        table_schema,
         table_name;
     `);
   }
@@ -65,14 +64,8 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
         extra,
         column_comment
       FROM information_schema.columns
-      WHERE table_schema NOT IN (
-        'mysql',
-        'information_schema',
-        'performance_schema',
-        'sys'
-      )
+      WHERE table_schema = DATABASE()
       ORDER BY
-        table_schema,
         table_name,
         ordinal_position;
     `);
@@ -91,14 +84,8 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
         AND kcu.table_schema = tc.table_schema
         AND kcu.table_name = tc.table_name
       WHERE tc.constraint_type = 'PRIMARY KEY'
-        AND kcu.table_schema NOT IN (
-          'mysql',
-          'information_schema',
-          'performance_schema',
-          'sys'
-        )
+        AND kcu.table_schema = DATABASE()
       ORDER BY
-        kcu.table_schema,
         kcu.table_name,
         kcu.ordinal_position;
     `);
@@ -119,19 +106,20 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
         AND kcu.table_schema = tc.table_schema
         AND kcu.table_name = tc.table_name
       WHERE tc.constraint_type = 'FOREIGN KEY'
-        AND kcu.table_schema NOT IN (
-          'mysql',
-          'information_schema',
-          'performance_schema',
-          'sys'
-        )
+        AND kcu.table_schema = DATABASE()
       ORDER BY
-        kcu.table_schema,
         kcu.table_name,
         kcu.ordinal_position;
     `);
   }
 
+  /**
+   * MySQL information_schema.statistics returns one row per
+   * index column, so composite indexes need to be aggregated.
+   *
+   * PRIMARY is intentionally included here. MySQL exposes the
+   * primary-key index as index_name = 'PRIMARY'.
+   */
   private async getIndexes(): Promise<Record<string, unknown>[]> {
     return this.database.query(`
       SELECT
@@ -142,15 +130,8 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
         non_unique,
         seq_in_index
       FROM information_schema.statistics
-      WHERE table_schema NOT IN (
-        'mysql',
-        'information_schema',
-        'performance_schema',
-        'sys'
-      )
-        AND index_name != 'PRIMARY'
+      WHERE table_schema = DATABASE()
       ORDER BY
-        table_schema,
         table_name,
         index_name,
         seq_in_index;
@@ -164,18 +145,20 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
     foreignKeyRows: Record<string, unknown>[],
     indexRows: Record<string, unknown>[],
   ): SchemaDefinition[] {
-    const schemaMap = new Map<string, TableDefinition[]>();
+    const tables = new Map<string, TableDefinition>();
 
-    // Build schemas and tables
+    /*
+     * ---------------------------------------------------------
+     * Build tables
+     * ---------------------------------------------------------
+     *
+     * For MySQL, the currently selected database is our single
+     * schema namespace.
+     */
     for (const row of tableRows) {
-      const schemaName = String(row.table_schema);
       const tableName = String(row.table_name);
 
-      if (!schemaMap.has(schemaName)) {
-        schemaMap.set(schemaName, []);
-      }
-
-      schemaMap.get(schemaName)!.push({
+      tables.set(tableName, {
         name: tableName,
         columns: [],
         primaryKeys: [],
@@ -184,13 +167,14 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
       });
     }
 
-    // Add columns
+    /*
+     * ---------------------------------------------------------
+     * Add columns
+     * ---------------------------------------------------------
+     */
     for (const row of columnRows) {
-      const table = this.findTable(
-        schemaMap,
-        String(row.table_schema),
-        String(row.table_name),
-      );
+      const tableName = String(row.table_name);
+      const table = tables.get(tableName);
 
       if (!table) continue;
 
@@ -203,75 +187,111 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
       });
     }
 
-    // Add primary keys
+    /*
+     * ---------------------------------------------------------
+     * Add primary keys
+     * ---------------------------------------------------------
+     *
+     * Keep the order returned by ordinal_position because
+     * composite primary keys are order-sensitive.
+     */
     for (const row of primaryKeyRows) {
-      const table = this.findTable(
-        schemaMap,
-        String(row.table_schema),
-        String(row.table_name),
-      );
+      const tableName = String(row.table_name);
+      const table = tables.get(tableName);
 
       if (!table) continue;
 
       table.primaryKeys.push(String(row.column_name));
     }
 
-    // Add foreign keys
+    /*
+     * ---------------------------------------------------------
+     * Add foreign keys
+     * ---------------------------------------------------------
+     */
+    const databaseName = this.database.getDatabaseName();
+
     for (const row of foreignKeyRows) {
-      const table = this.findTable(
-        schemaMap,
-        String(row.table_schema),
-        String(row.table_name),
-      );
+      const tableName = String(row.table_name);
+      const table = tables.get(tableName);
 
       if (!table) continue;
 
       const foreignKey: ForeignKeyDefinition = {
         columnName: String(row.column_name),
-        referencedSchema: String(
-          row.referenced_table_schema ?? row.table_schema,
-        ),
+
+        referencedSchema: String(row.referenced_table_schema ?? databaseName),
+
         referencedTable: String(row.referenced_table_name),
+
         referencedColumn: String(row.referenced_column_name),
       };
 
       table.foreignKeys.push(foreignKey);
     }
 
-    // Aggregate indexes (MySQL returns one row per index column)
+    /*
+     * ---------------------------------------------------------
+     * Aggregate indexes
+     * ---------------------------------------------------------
+     *
+     * information_schema.statistics returns:
+     *
+     *   index_1 | column_a
+     *   index_1 | column_b
+     *   index_1 | column_c
+     *
+     * for a composite index.
+     *
+     * We therefore aggregate by:
+     *
+     *   table + index
+     *
+     * while preserving seq_in_index ordering.
+     */
     const indexMap = new Map<
       string,
-      Map<string, { columns: string[]; nonUnique: number }>
+      Map<
+        string,
+        {
+          columns: string[];
+          nonUnique: number;
+        }
+      >
     >();
 
     for (const row of indexRows) {
-      const schemaName = String(row.table_schema);
       const tableName = String(row.table_name);
       const indexName = String(row.index_name);
       const columnName = String(row.column_name);
       const nonUnique = Number(row.non_unique);
 
-      const schemaKey = `${schemaName}.${tableName}`;
-      if (!indexMap.has(schemaKey)) {
-        indexMap.set(schemaKey, new Map());
+      if (!indexMap.has(tableName)) {
+        indexMap.set(tableName, new Map());
       }
 
-      const tableIndexes = indexMap.get(schemaKey)!;
+      const tableIndexes = indexMap.get(tableName)!;
+
       if (!tableIndexes.has(indexName)) {
-        tableIndexes.set(indexName, { columns: [], nonUnique });
+        tableIndexes.set(indexName, {
+          columns: [],
+          nonUnique,
+        });
       }
 
       tableIndexes.get(indexName)!.columns.push(columnName);
     }
 
-    // Attach aggregated indexes to tables
-    for (const [schemaTableKey, tableIndexes] of indexMap.entries()) {
-      const parts = schemaTableKey.split(".");
-      if (parts.length < 2) continue;
-
-      const schemaName = parts[0]!;
-      const tableName = parts[1]!;
-      const table = this.findTable(schemaMap, schemaName, tableName);
+    /*
+     * ---------------------------------------------------------
+     * Attach indexes to tables
+     * ---------------------------------------------------------
+     *
+     * PRIMARY is identified directly from MySQL's index_name.
+     * We do NOT infer primary indexes by comparing columns.
+     */
+    for (const [tableName, tableIndexes] of indexMap.entries()) {
+      const table = tables.get(tableName);
 
       if (!table) continue;
 
@@ -280,44 +300,23 @@ export class MySQLSchemaIntrospector implements ISchemaIntrospector {
           name: indexName,
           columns: indexData.columns,
           unique: indexData.nonUnique === 0,
-          primary: false,
+          primary: indexName === "PRIMARY",
         };
 
         table.indexes.push(index);
       }
     }
 
-    // Mark primary-key indexes
-    for (const schema of schemaMap.values()) {
-      for (const table of schema) {
-        const primaryKeyColumns = new Set(table.primaryKeys);
-
-        for (const index of table.indexes) {
-          const indexColumns = new Set(index.columns);
-
-          if (
-            indexColumns.size === primaryKeyColumns.size &&
-            [...primaryKeyColumns].every((column) => indexColumns.has(column))
-          ) {
-            index.primary = true;
-          }
-        }
-      }
-    }
-
-    return Array.from(schemaMap.entries()).map(([name, tables]) => ({
-      name,
-      tables,
-    }));
-  }
-
-  private findTable(
-    schemaMap: Map<string, TableDefinition[]>,
-    schemaName: string,
-    tableName: string,
-  ): TableDefinition | undefined {
-    const tables = schemaMap.get(schemaName);
-    if (!tables) return undefined;
-    return tables.find((table) => table.name === tableName);
+    /*
+     * ---------------------------------------------------------
+     * Return the MySQL database as one SchemaDefinition
+     * ---------------------------------------------------------
+     */
+    return [
+      {
+        name: databaseName,
+        tables: Array.from(tables.values()),
+      },
+    ];
   }
 }
