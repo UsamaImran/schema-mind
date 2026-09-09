@@ -22,6 +22,11 @@ export interface SemanticSearchResult {
   dialect: SqlDialect;
 }
 
+export interface SemanticTableLookup {
+  schemaName?: string;
+  tableName: string;
+}
+
 export class SemanticUnitRepository {
   async upsert(unit: SemanticUnitInput): Promise<void> {
     await SemanticUnitModel.updateOne(
@@ -65,6 +70,37 @@ export class SemanticUnitRepository {
       schemaName,
       tableName,
       type: "table",
+    }).lean();
+  }
+
+  async findByTables(
+    databaseName: string,
+    tables: SemanticTableLookup[],
+  ): Promise<SemanticUnit[]> {
+    if (tables.length === 0) {
+      return [];
+    }
+
+    const uniqueTables = new Map<string, SemanticTableLookup>();
+
+    for (const table of tables) {
+      const key = `${table.schemaName ?? ""}:${table.tableName}`;
+      uniqueTables.set(key, table);
+    }
+
+    return SemanticUnitModel.find({
+      databaseName,
+      type: "table",
+      $or: [...uniqueTables.values()].map((table) =>
+        table.schemaName
+          ? {
+              schemaName: table.schemaName,
+              tableName: table.tableName,
+            }
+          : {
+              tableName: table.tableName,
+            },
+      ),
     }).lean();
   }
 
