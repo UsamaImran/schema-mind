@@ -76,7 +76,7 @@ export class SemanticUnitRepository {
   async findByTables(
     databaseName: string,
     tables: SemanticTableLookup[],
-  ): Promise<SemanticUnit[]> {
+  ): Promise<SemanticSearchResult[]> {
     if (tables.length === 0) {
       return [];
     }
@@ -88,7 +88,7 @@ export class SemanticUnitRepository {
       uniqueTables.set(key, table);
     }
 
-    return SemanticUnitModel.find({
+    const units = await SemanticUnitModel.find({
       databaseName,
       type: "table",
       $or: [...uniqueTables.values()].map((table) =>
@@ -102,6 +102,11 @@ export class SemanticUnitRepository {
             },
       ),
     }).lean();
+
+    return units.map((unit) => ({
+      ...unit,
+      score: 0,
+    }));
   }
 
   async deleteByTable(
