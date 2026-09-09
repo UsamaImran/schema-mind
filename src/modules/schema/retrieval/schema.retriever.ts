@@ -4,6 +4,7 @@ import {
   SchemaGraphRepository,
 } from "../../../infrastructure/mongo/repositories/schemaGraph.repository.js";
 import {
+  SemanticTableLookup,
   SemanticUnitRepository,
   SemanticSearchResult,
 } from "../../../infrastructure/mongo/repositories/semanticUnit.repository.js";
@@ -20,15 +21,14 @@ export interface HybridSearchResult extends SemanticSearchResult {
   finalScore: number;
 
   graphMatched: boolean;
+  retrievalSource: "hybrid" | "graph";
 
   /**
-   * Only exists when the result was confirmed by graph traversal.
-   *
-   * IMPORTANT:
-   * With exactOptionalPropertyTypes enabled, this must be
-   * optional rather than `graphDistance: number | undefined`.
+   * Only exists when the result was confirmed/discovered by graph traversal.
    */
   graphDistance?: number;
+  graphRank?: number;
+  graphSeedHybridScore?: number;
 }
 
 export class SchemaRetriever {
@@ -41,7 +41,7 @@ export class SchemaRetriever {
   private static readonly FINAL_RESULT_LIMIT = 5;
 
   /**
-   * Maximum graph boost.
+   * Maximum graph boost applied to a candidate already found by hybrid retrieval.
    *
    * Distance 0 -> 0.005
    * Distance 1 -> 0.0025
@@ -62,7 +62,13 @@ export class SchemaRetriever {
     databaseName: string,
     options: SchemaRetrievalOptions = {},
   ) {
-    const limit = SchemaRetriever.RRF_CANDIDATE_LIMIT;
+    const finalLimit = this.resolveLimit(
+      options.limit ?? SchemaRetriever.FINAL_RESULT_LIMIT,
+    );
+    const candidateLimit = Math.max(
+      SchemaRetriever.RRF_CANDIDATE_LIMIT,
+      finalLimit,
+    );
 
     const [queryEmbedding] = await this.embeddingService.embed([question]);
 
@@ -74,16 +80,20 @@ export class SchemaRetriever {
       this.semanticUnitRepository.vectorSearch(
         databaseName,
         queryEmbedding,
-        limit,
+        candidateLimit,
       ),
 
-      this.semanticUnitRepository.keywordSearch(databaseName, question, limit),
+      this.semanticUnitRepository.keywordSearch(
+        databaseName,
+        question,
+        candidateLimit,
+      ),
     ]);
 
     const hybridResults = this.reciprocalRankFusion(
       vectorResults,
       keywordResults,
-      limit,
+      candidateLimit,
     );
 
     // ============================================================
@@ -103,19 +113,20 @@ export class SchemaRetriever {
             graphSeeds,
             {
               maxDepth: SchemaRetriever.GRAPH_MAX_DEPTH,
-              limit,
+              limit: candidateLimit,
             },
           )
         : [];
 
     // ============================================================
-    // STEP 6: Graph confirmation + boost
+    // STEP 6: Graph candidate discovery + final ranking
     // ============================================================
 
-    const finalResults = this.applyGraphBoost(
+    const finalResults = await this.buildFinalResults(
       hybridResults,
       graphResults,
-      limit,
+      databaseName,
+      finalLimit,
     );
 
     return {
@@ -129,16 +140,12 @@ export class SchemaRetriever {
 
   /**
    * Convert strongest hybrid results into graph seeds.
-   *
-   * GraphSeed does not contain nodeId.
-   * SchemaGraphRepository constructs/resolves the node identity.
    */
   private createGraphSeeds(
     hybridResults: HybridSearchResult[],
     databaseName: string,
   ): GraphSeed[] {
     const seeds: GraphSeed[] = [];
-
     const seen = new Set<string>();
 
     for (
@@ -149,20 +156,11 @@ export class SchemaRetriever {
     ) {
       const result = hybridResults[index];
 
-      if (!result) {
-        continue;
-      }
-
-      if (!result.tableName) {
-        continue;
-      }
-
-      if (!result.sourceId) {
+      if (!result || !result.tableName || !result.sourceId) {
         continue;
       }
 
       const schemaName = result.schemaName ?? "public";
-
       const seedKey = [
         result.sourceId.toString(),
         databaseName,
@@ -190,16 +188,120 @@ export class SchemaRetriever {
   }
 
   /**
-   * Confirm hybrid results against graph results and apply a
-   * distance-aware graph boost.
+   * Build the final retrieval pool from:
    *
-   * Graph-discovered tables are NOT automatically inserted into
-   * the final result set.
+   * 1. hybrid candidates discovered by semantic + keyword retrieval
+   * 2. graph-only candidates discovered through FK traversal
    *
-   * Only tables already present in hybridResults are boosted.
+   * Graph-only candidates do not get another embedding/keyword search.
+   * Their relevance is anchored to the strength of the hybrid seed and
+   * decays with FK distance.
    */
-  private applyGraphBoost(
+  private async buildFinalResults(
     hybridResults: HybridSearchResult[],
+    graphResults: Array<{
+      nodeId: string;
+      sourceId: SemanticSearchResult["sourceId"];
+      databaseName: string;
+      tableName?: string;
+      schemaName?: string;
+      graphRank: number;
+      score: number;
+      distance: number;
+      seedHybridScore: number;
+    }>,
+    databaseName: string,
+    limit: number,
+  ): Promise<HybridSearchResult[]> {
+    const hybridByNodeId = new Set(
+      hybridResults
+        .filter((result) => result.tableName)
+        .map((result) =>
+          [
+            result.databaseName,
+            result.schemaName ?? "public",
+            result.tableName,
+          ].join("."),
+        ),
+    );
+
+    const graphOnlyResults = graphResults.filter(
+      (result) =>
+        result.databaseName === databaseName &&
+        !!result.tableName &&
+        !hybridByNodeId.has(
+          [
+            result.databaseName,
+            result.schemaName ?? "public",
+            result.tableName,
+          ].join("."),
+        ),
+    );
+
+    const semanticTables: SemanticTableLookup[] = graphOnlyResults.map(
+      (result) => ({
+        ...(result.schemaName !== undefined && {
+          schemaName: result.schemaName,
+        }),
+        tableName: result.tableName!,
+      }),
+    );
+
+    const semanticUnits = await this.semanticUnitRepository.findByTables(
+      databaseName,
+      semanticTables,
+    );
+
+    const semanticByNodeId = new Map(
+      semanticUnits.map((unit) => [
+        [
+          unit.databaseName,
+          unit.schemaName ?? "public",
+          unit.tableName,
+        ].join("."),
+        unit,
+      ]),
+    );
+
+    const graphCandidates = this.createGraphCandidates(
+      graphOnlyResults,
+      semanticByNodeId,
+    );
+
+    const hybridCandidates = hybridResults.map((result) =>
+      this.applyGraphMatch(result, graphResults),
+    );
+
+    return [...hybridCandidates, ...graphCandidates]
+      .sort((a, b) => {
+        if (b.finalScore !== a.finalScore) {
+          return b.finalScore - a.finalScore;
+        }
+
+        if (
+          b.reciprocalRankFusionScore !==
+          a.reciprocalRankFusionScore
+        ) {
+          return (
+            b.reciprocalRankFusionScore -
+            a.reciprocalRankFusionScore
+          );
+        }
+
+        if ((b.graphDistance ?? Infinity) !== (a.graphDistance ?? Infinity)) {
+          return (a.graphDistance ?? Infinity) - (b.graphDistance ?? Infinity);
+        }
+
+        return a._id.toString().localeCompare(b._id.toString());
+      })
+      .slice(0, limit);
+  }
+
+  /**
+   * Convert graph-only discoveries into semantic candidates so their
+   * complete table context can be passed to SQL generation.
+   */
+  private createGraphCandidates(
     graphResults: Array<{
       nodeId: string;
       tableName?: string;
@@ -207,115 +309,117 @@ export class SchemaRetriever {
       graphRank: number;
       score: number;
       distance: number;
+      seedHybridScore: number;
     }>,
-    limit: number,
+    semanticByNodeId: Map<string, SemanticSearchResult>,
   ): HybridSearchResult[] {
-    const graphMatches = new Map<
-      string,
-      {
-        distance: number;
-        graphRank: number;
-      }
-    >();
+    const candidates = new Map<string, HybridSearchResult>();
 
     for (const graphResult of graphResults) {
-      graphMatches.set(graphResult.nodeId, {
-        distance: graphResult.distance,
+      if (!graphResult.tableName) {
+        continue;
+      }
+
+      const nodeId = [
+        graphResult.schemaName ?? "public",
+        graphResult.tableName,
+      ].join(".");
+
+      const fullNodeId = graphResult.nodeId;
+      const semanticUnit = [...semanticByNodeId.entries()].find(([key]) =>
+        key.endsWith(nodeId),
+      )?.[1];
+
+      if (!semanticUnit) {
+        continue;
+      }
+
+      const graphScore =
+        graphResult.seedHybridScore / (1 + graphResult.distance);
+
+      const candidate: HybridSearchResult = {
+        ...semanticUnit,
+        score: 0,
+        reciprocalRankFusionScore: 0,
+        finalScore: graphScore,
+        graphMatched: true,
+        retrievalSource: "graph",
+        graphDistance: graphResult.distance,
         graphRank: graphResult.graphRank,
-      });
+        graphSeedHybridScore: graphResult.seedHybridScore,
+      };
+
+      const existing = candidates.get(fullNodeId);
+
+      if (
+        !existing ||
+        candidate.finalScore > existing.finalScore ||
+        (candidate.finalScore === existing.finalScore &&
+          (candidate.graphDistance ?? Infinity) <
+            (existing.graphDistance ?? Infinity))
+      ) {
+        candidates.set(fullNodeId, candidate);
+      }
     }
 
-    const boostedResults: HybridSearchResult[] = hybridResults.map(
-      (result): HybridSearchResult => {
-        /*
-         * No usable table/source information.
-         * Return the hybrid result unchanged apart from
-         * resetting graph-related fields.
-         */
-        if (!result.tableName || !result.sourceId) {
-          return {
-            ...result,
-            finalScore: result.reciprocalRankFusionScore,
-            graphMatched: false,
-          };
-        }
+    return [...candidates.values()];
+  }
 
-        const schemaName = result.schemaName ?? "public";
+  /**
+   * Apply graph evidence to a candidate that was already discovered by
+   * semantic/keyword retrieval.
+   */
+  private applyGraphMatch(
+    result: HybridSearchResult,
+    graphResults: Array<{
+      nodeId: string;
+      graphRank: number;
+      distance: number;
+      seedHybridScore: number;
+    }>,
+  ): HybridSearchResult {
+    if (!result.tableName || !result.sourceId) {
+      return {
+        ...result,
+        finalScore: result.reciprocalRankFusionScore,
+        graphMatched: false,
+        retrievalSource: "hybrid",
+      };
+    }
 
-        /*
-         * IMPORTANT:
-         *
-         * Must match SchemaGraphRepository's nodeId convention:
-         *
-         * schema-mind-db.public.film
-         */
-        const nodeId = [result.databaseName, schemaName, result.tableName].join(
-          ".",
-        );
-
-        const graphMatch = graphMatches.get(nodeId);
-
-        /*
-         * Hybrid result was not found in graph traversal.
-         */
-        if (!graphMatch) {
-          return {
-            ...result,
-            finalScore: result.reciprocalRankFusionScore,
-            graphMatched: false,
-          };
-        }
-
-        /*
-         * Distance-aware boost:
-         *
-         * distance 0 -> 0.005
-         * distance 1 -> 0.0025
-         * distance 2 -> 0.00125
-         */
-        const graphBoost =
-          SchemaRetriever.GRAPH_BOOST / Math.pow(2, graphMatch.distance);
-
-        return {
-          ...result,
-          finalScore: result.reciprocalRankFusionScore + graphBoost,
-          graphMatched: true,
-          graphDistance: graphMatch.distance,
-        };
-      },
+    const schemaName = result.schemaName ?? "public";
+    const nodeId = [result.databaseName, schemaName, result.tableName].join(
+      ".",
+    );
+    const graphMatch = graphResults.find((candidate) =>
+      candidate.nodeId === nodeId,
     );
 
-    return boostedResults
-      .sort((a, b) => {
-        /*
-         * Primary ordering:
-         * graph-boosted/final score.
-         */
-        if (b.finalScore !== a.finalScore) {
-          return b.finalScore - a.finalScore;
-        }
+    if (!graphMatch) {
+      return {
+        ...result,
+        finalScore: result.reciprocalRankFusionScore,
+        graphMatched: false,
+        retrievalSource: "hybrid",
+      };
+    }
 
-        /*
-         * Secondary ordering:
-         * original RRF score.
-         */
-        if (b.reciprocalRankFusionScore !== a.reciprocalRankFusionScore) {
-          return b.reciprocalRankFusionScore - a.reciprocalRankFusionScore;
-        }
+    const graphBoost =
+      SchemaRetriever.GRAPH_BOOST / Math.pow(2, graphMatch.distance);
 
-        /*
-         * Deterministic final tie-breaker.
-         */
-        return a._id.toString().localeCompare(b._id.toString());
-      })
-      .slice(0, limit);
+    return {
+      ...result,
+      finalScore: result.reciprocalRankFusionScore + graphBoost,
+      graphMatched: true,
+      retrievalSource: "hybrid",
+      graphDistance: graphMatch.distance,
+      graphRank: graphMatch.graphRank,
+      graphSeedHybridScore: graphMatch.seedHybridScore,
+    };
   }
 
   /**
    * Reciprocal Rank Fusion.
-   *
-   * A result appearing in both vector and keyword retrieval
-   * receives a score contribution from both rankings.
    */
   private reciprocalRankFusion(
     vectorResults: SemanticSearchResult[],
@@ -324,76 +428,44 @@ export class SchemaRetriever {
   ): HybridSearchResult[] {
     const results = new Map<string, HybridSearchResult>();
 
-    // ============================================================
-    // Vector contribution
-    // ============================================================
-
     vectorResults.forEach((result, index) => {
       const id = result._id.toString();
-
       const rank = index + 1;
-
       const score = 1 / (SchemaRetriever.RRF_K + rank);
 
       results.set(id, {
         ...result,
-
         vectorRank: rank,
-
         reciprocalRankFusionScore: score,
-
         finalScore: score,
-
         graphMatched: false,
+        retrievalSource: "hybrid",
         dialect: result.dialect ?? "postgresql",
       });
     });
 
-    // ============================================================
-    // Keyword contribution
-    // ============================================================
-
     keywordResults.forEach((result, index) => {
       const id = result._id.toString();
-
       const rank = index + 1;
-
       const score = 1 / (SchemaRetriever.RRF_K + rank);
-
       const existing = results.get(id);
 
-      /*
-       * Result appeared in both vector and keyword retrieval.
-       */
       if (existing) {
         existing.keywordRank = rank;
-
         existing.reciprocalRankFusionScore += score;
-
         existing.finalScore = existing.reciprocalRankFusionScore;
-
         return;
       }
 
-      /*
-       * Result appeared only in keyword retrieval.
-       */
       results.set(id, {
         ...result,
-
         keywordRank: rank,
-
         reciprocalRankFusionScore: score,
-
         finalScore: score,
-
         graphMatched: false,
+        retrievalSource: "hybrid",
       });
     });
-
-    // ============================================================
-    // Sort by RRF score
-    // ============================================================
 
     return Array.from(results.values())
       .sort((a, b) => b.reciprocalRankFusionScore - a.reciprocalRankFusionScore)
