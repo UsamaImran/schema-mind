@@ -55,6 +55,7 @@ export class StructuralEvaluator {
       mysql: "mysql",
       sqlite: "sqlite",
       mssql: "transactsql",
+      oracle: "oracle",
     };
     return map[dialect] || "postgresql";
   }

@@ -9,7 +9,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
 
   DATABASE_DIALECT: z
-    .enum(["postgresql", "mysql", "sqlite", "mssql"])
+    .enum(["postgresql", "mysql", "sqlite", "mssql", "oracle"])
     .default("postgresql"),
 
   // Generic SQL database connection (source DB for schema introspection)
@@ -18,6 +18,12 @@ const envSchema = z.object({
   DB_NAME: z.string().min(1),
   DB_USER: z.string().min(1),
   DB_PASSWORD: z.string(),
+
+  // Optional Oracle service name / connect string override
+  ORACLE_SERVICE_NAME: z.string().optional(),
+
+  // Schema change detection polling interval (applies to MySQL & Oracle)
+  SCHEMA_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(30000),
 
   MONGO_URI: z.string().min(1),
 

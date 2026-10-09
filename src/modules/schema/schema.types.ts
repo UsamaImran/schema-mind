@@ -4,7 +4,7 @@ export interface DatabaseSchema {
   schemas: SchemaDefinition[];
 }
 
-export type SqlDialect = "postgresql" | "mysql" | "sqlite" | "mssql";
+export type SqlDialect = "postgresql" | "mysql" | "sqlite" | "mssql" | "oracle";
 
 export interface SchemaDefinition {
   name: string;

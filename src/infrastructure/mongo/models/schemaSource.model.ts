@@ -9,7 +9,7 @@ const schemaSourceSchema = new Schema(
 
     databaseType: {
       type: String,
-      enum: ["postgresql", "mysql", "sqlite", "mssql"],
+      enum: ["postgresql", "mysql", "sqlite", "mssql", "oracle"],
       required: true,
     },
 
@@ -60,12 +60,14 @@ schemaSourceSchema.index(
   },
 );
 
+import type { SqlDialect } from "../../../modules/schema/schema.types.js";
+
 export interface SchemaSource {
   _id: Types.ObjectId;
 
   databaseName: string;
 
-  databaseType: "postgresql" | "mysql" | "sqlite" | "mssql";
+  databaseType: SqlDialect;
 
   schemaCount: number;
 

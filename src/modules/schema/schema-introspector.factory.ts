@@ -2,6 +2,7 @@ import type { ISqlDatabaseAdapter } from "../../interfaces/sql-database.adapter.
 import { PostgreSQLSchemaIntrospector } from "../../infrastructure/postgres/postgres.schema-introspector.js";
 import type { ISchemaIntrospector } from "./schema.intropector.js";
 import { MySQLSchemaIntrospector } from "../../infrastructure/mysql/mySql.schema-introspector.js";
+import { OracleSchemaIntrospector } from "../../infrastructure/oracle/oracle.schema-introspector.js";
 
 export function createSchemaIntrospector(
   adapter: ISqlDatabaseAdapter,
@@ -11,6 +12,8 @@ export function createSchemaIntrospector(
       return new PostgreSQLSchemaIntrospector(adapter);
     case "mysql":
       return new MySQLSchemaIntrospector(adapter);
+    case "oracle":
+      return new OracleSchemaIntrospector(adapter);
     default:
       throw new Error(`No introspector for dialect: ${adapter.getDialect()}`);
   }

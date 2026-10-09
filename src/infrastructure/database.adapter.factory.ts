@@ -2,6 +2,7 @@ import { env } from "../config/env.js";
 import type { ISqlDatabaseAdapter } from "../interfaces/sql-database.adapter.js";
 import { MySQLAdapter } from "./mysql/mySql.adapter.js";
 import { PostgreSQLAdapter } from "./postgres/postgres.adapter.js";
+import { OracleAdapter } from "./oracle/oracle.adapter.js";
 
 export function createDatabaseAdapter(): ISqlDatabaseAdapter {
   switch (env.DATABASE_DIALECT) {
@@ -9,6 +10,8 @@ export function createDatabaseAdapter(): ISqlDatabaseAdapter {
       return new PostgreSQLAdapter();
     case "mysql":
       return new MySQLAdapter();
+    case "oracle":
+      return new OracleAdapter();
     // case "sqlite": return new SQLiteAdapter();
     // case "mssql": return new SQLServerAdapter();
     default:

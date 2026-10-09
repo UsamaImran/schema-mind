@@ -100,9 +100,25 @@ services:
       retries: 5
       start_period: 30s
 
+  oracle:
+    profiles:
+      - oracle
+
+    image: container-registry.oracle.com/database/free:latest
+
+    environment:
+      ORACLE_PWD: ${DB_PASSWORD:-schema_mind}
+
+    ports:
+      - "${ORACLE_PORT:-1521}:1521"
+
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+
 volumes:
   mongodb_data:
   mongodb_config:
   mongodb_mongot:
   postgres_data:
   mysql_data:
+  oracle_data:

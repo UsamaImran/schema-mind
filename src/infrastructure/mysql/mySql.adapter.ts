@@ -54,6 +54,10 @@ export class MySQLAdapter implements ISqlDatabaseAdapter {
   }
 
   createSchemaChangeListener(onChange: () => Promise<void>) {
-    return new MySQLSchemaChangeListener(this, onChange);
+    return new MySQLSchemaChangeListener(
+      this,
+      onChange,
+      env.SCHEMA_POLL_INTERVAL_MS,
+    );
   }
 }

@@ -4,7 +4,9 @@ import { PostgresExecutor } from "./postgres.executor.js";
 import type { ISqlDatabaseAdapter } from "../../interfaces/sql-database.adapter.js";
 import { Pool as PgPool } from "pg";
 import type { Pool as MySQLPool } from "mysql2/promise";
+import type { Pool as OraclePool } from "oracledb";
 import { MySQLExecutor } from "./mySql.executor.js";
+import { OracleExecutor } from "./oracle.executor.js";
 
 export function registerDialects(
   factory: ExecutorFactory,
@@ -19,6 +21,10 @@ export function registerDialects(
   } else if (dialect === "mysql") {
     factory.registerDialect("mysql", () => {
       return new MySQLExecutor(dbAdapter.getPool() as unknown as MySQLPool);
+    });
+  } else if (dialect === "oracle") {
+    factory.registerDialect("oracle", () => {
+      return new OracleExecutor(dbAdapter.getPool() as unknown as OraclePool);
     });
   }
 }
