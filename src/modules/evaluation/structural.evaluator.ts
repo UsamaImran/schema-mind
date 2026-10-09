@@ -16,10 +16,15 @@ export class StructuralEvaluator {
 
       const statements = Array.isArray(ast) ? ast : [ast];
 
+      if (statements.length > 1) {
+        details.push("Multiple statements detected");
+        score = 0;
+      }
+
       for (const stmt of statements) {
         if (stmt.type !== "select") {
           details.push(`Non-SELECT statement detected: ${stmt.type}`);
-          score -= 50;
+          score = 0;
         }
       }
 
@@ -31,14 +36,6 @@ export class StructuralEvaluator {
           details.push(`Table '${table}' not in retrieved schema context`);
           score -= 15;
         }
-      }
-
-      if (
-        sql.includes(";") &&
-        sql.split(";").filter((s) => s.trim()).length > 1
-      ) {
-        details.push("Multiple statements detected");
-        score -= 20;
       }
     } catch (err: any) {
       details.push(`Syntax error: ${err.message}`);
@@ -64,6 +61,22 @@ export class StructuralEvaluator {
 
   private extractTables(ast: any): string[] {
     const tables: string[] = [];
+    const cteNames = new Set<string>();
+
+    const statements = Array.isArray(ast) ? ast : [ast];
+
+    for (const stmt of statements) {
+      if (stmt && stmt._with) {
+        const ctes = Array.isArray(stmt._with) ? stmt._with : [stmt._with];
+        for (const cte of ctes) {
+          const name =
+            typeof cte.name === "object" ? cte.name?.value : cte.name;
+          if (name && typeof name === "string") {
+            cteNames.add(name.toLowerCase());
+          }
+        }
+      }
+    }
 
     const walk = (node: any) => {
       if (!node || typeof node !== "object") return;
@@ -97,10 +110,11 @@ export class StructuralEvaluator {
       }
     };
 
-    const statements = Array.isArray(ast) ? ast : [ast];
     for (const stmt of statements) walk(stmt);
 
-    return [...new Set(tables)];
+    return [...new Set(tables)].filter(
+      (tableName) => !cteNames.has(tableName.toLowerCase()),
+    );
   }
 
   private extractValidTables(schemaContext: string): Set<string> {

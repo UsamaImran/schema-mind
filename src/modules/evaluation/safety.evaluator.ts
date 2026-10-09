@@ -2,16 +2,18 @@ import type { CheckResult, EvaluationInput } from "./evaluation.types.js";
 
 export class SafetyEvaluator {
   private readonly forbiddenPatterns = [
-    /\bDROP\s+/gi,
-    /\bDELETE\s+/gi,
-    /\bUPDATE\s+/gi,
-    /\bINSERT\s+/gi,
-    /\bALTER\s+/gi,
-    /\bTRUNCATE\s+/gi,
-    /\bGRANT\s+/gi,
-    /\bREVOKE\s+/gi,
-    /;\s*DROP/gi,
-    /UNION\s+SELECT/gi,
+    /\bDROP\s+/i,
+    /\bDELETE\s+/i,
+    /\bUPDATE\s+/i,
+    /\bINSERT\s+/i,
+    /\bALTER\s+/i,
+    /\bTRUNCATE\s+/i,
+    /\bGRANT\s+/i,
+    /\bREVOKE\s+/i,
+    /\bCREATE\s+/i,
+    /\bEXEC(UTE)?\s+/i,
+    /\bCALL\s+/i,
+    /\bLOCK\s+TABLES?\b/i,
   ];
 
   evaluate(input: EvaluationInput): CheckResult {
@@ -19,27 +21,22 @@ export class SafetyEvaluator {
     const details: string[] = [];
     let score = 100;
 
-    const sqlUpper = sql.toUpperCase();
-
     for (const pattern of this.forbiddenPatterns) {
       if (pattern.test(sql)) {
-        details.push(`Forbidden pattern: ${pattern.source}`);
-        score -= 25;
+        details.push(`Forbidden modifying pattern detected: ${pattern.source}`);
+        score = 0;
       }
     }
 
-    if (/\+\s*['"]/.test(sql) || /\|\|\s*['"]/.test(sql)) {
-      details.push("String concatenation detected — injection risk");
-      score -= 20;
-    }
-
-    if (sql.includes("/*") || sql.includes("--")) {
-      details.push("Comments detected — possible obfuscation");
+    if (sql.includes("/*") || /--(?!\s*$)[\s\S]*$/.test(sql)) {
+      details.push("Comments detected in query");
       score -= 10;
     }
 
+    const hasForbidden = details.some((d) => d.startsWith("Forbidden"));
+
     return {
-      passed: score >= 90 && !details.some((d) => d.startsWith("Forbidden")),
+      passed: !hasForbidden && score >= 80,
       score: Math.max(0, score),
       details,
     };

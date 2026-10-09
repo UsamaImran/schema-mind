@@ -31,8 +31,13 @@ export class PostgresExecutor implements IQueryExecutor {
         await client.query(timeoutSql);
       }
 
-      const result = await client.query(sql);
+      const cleanSql = sql.trim().replace(/;\s*$/, "");
       const maxRows = options.maxRows ?? 100;
+      const executableSql = /\blimit\s+\d+/i.test(cleanSql)
+        ? cleanSql
+        : `${cleanSql} LIMIT ${maxRows}`;
+
+      const result = await client.query(executableSql);
       const rows = result.rows.slice(0, maxRows);
 
       return {

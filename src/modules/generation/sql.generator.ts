@@ -36,6 +36,7 @@ RULES:
 - Generate only a read-only SELECT query.
 - Never generate INSERT, UPDATE, DELETE, DROP, ALTER, CREATE,
   TRUNCATE, GRANT, REVOKE, or other modifying statements.
+- Include a LIMIT clause (maximum 100) if multiple rows can be returned, unless an explicit aggregate (e.g. COUNT, SUM) is calculated.
 - Do not include explanations.
 - Do not use markdown code fences.
 - Return ONLY the SQL query.

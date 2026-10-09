@@ -25,8 +25,14 @@ export class MySQLExecutor implements IQueryExecutor {
         inTransaction = true;
       }
 
+      const cleanSql = sql.trim().replace(/;\s*$/, "");
+      const maxRows = options.maxRows ?? 100;
+      const executableSql = /\blimit\s+\d+/i.test(cleanSql)
+        ? cleanSql
+        : `${cleanSql} LIMIT ${maxRows}`;
+
       const queryOptions: QueryOptions = {
-        sql,
+        sql: executableSql,
         ...(options.timeoutMs !== undefined && options.timeoutMs > 0
           ? { timeout: Math.max(0, Math.floor(options.timeoutMs)) }
           : {}),
@@ -34,7 +40,6 @@ export class MySQLExecutor implements IQueryExecutor {
 
       const [rows, fields] = await connection.query(queryOptions);
       const rowArray = Array.isArray(rows) ? rows : [];
-      const maxRows = options.maxRows ?? 100;
       const slicedRows = rowArray.slice(0, maxRows);
 
       const columns = Array.isArray(fields)
