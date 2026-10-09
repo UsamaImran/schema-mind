@@ -77,7 +77,7 @@ export class MySQLSchemaChangeListener extends BaseSchemaChangeListener {
     const [tableHash] = await this.adapter.query<{ hash: string }>(
       `
       SELECT MD5(GROUP_CONCAT(
-        CONCAT(table_name, ':', engine, ':', table_rows)
+        CONCAT(table_name, ':', COALESCE(engine, ''))
         ORDER BY table_name
         SEPARATOR '|'
       )) as hash
