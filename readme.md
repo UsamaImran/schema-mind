@@ -20,11 +20,13 @@ Currently supports **PostgreSQL** and **MySQL**. The architecture is designed to
     - MySQL: periodic fingerprint polling
   - Automatically re-ingests when the schema changes
 
-- **Hybrid Retrieval**
+- **Hybrid Retrieval + Graph Bridge Discovery**
   - Semantic (vector) search
   - Keyword search
   - Reciprocal Rank Fusion (RRF)
-  - Foreign-key graph expansion (max depth 2) with distance-decayed boosting
+  - Foreign-key graph expansion (max depth 2)
+  - Automatic discovery and inclusion of intermediate/junction bridge tables missing from direct search
+  - Distance-calibrated scoring and graph boosting
 
 - **Dialect-aware SQL Generation**  
   Uses Gemini, constrained to a single read-only `SELECT` based on the retrieved schema context.
@@ -61,6 +63,7 @@ User Question
 │  • Keyword Search   │
 │  • RRF Hybrid       │
 │  • Graph Expansion  │
+│  • Bridge Discovery │
 │  • Final Ranking    │
 └──────────┬──────────┘
            │

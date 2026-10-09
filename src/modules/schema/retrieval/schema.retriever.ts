@@ -49,6 +49,13 @@ export class SchemaRetriever {
    */
   private static readonly GRAPH_BOOST = 0.005;
 
+  /**
+   * Distance-decay penalty per FK hop applied to graph-discovered tables.
+   * Calibrated against RRF (K=60) so that 1-hop and 2-hop join neighbors
+   * of top hybrid seeds remain competitive for slots in the top-5 schema context.
+   */
+  private static readonly GRAPH_HOP_PENALTY = 0.0005;
+
   private static readonly RRF_K = 60;
 
   constructor(
@@ -320,22 +327,23 @@ export class SchemaRetriever {
         continue;
       }
 
-      const nodeId = [
-        graphResult.schemaName ?? "public",
-        graphResult.tableName,
-      ].join(".");
-
       const fullNodeId = graphResult.nodeId;
-      const semanticUnit = [...semanticByNodeId.entries()].find(([key]) =>
-        key.endsWith(nodeId),
-      )?.[1];
+      const semanticUnit =
+        semanticByNodeId.get(fullNodeId) ??
+        [...semanticByNodeId.entries()].find(([key]) =>
+          key.endsWith(`.${graphResult.tableName}`),
+        )?.[1];
 
       if (!semanticUnit) {
         continue;
       }
 
-      const graphScore =
-        graphResult.seedHybridScore / (1 + graphResult.distance);
+      const distancePenalty =
+        SchemaRetriever.GRAPH_HOP_PENALTY * graphResult.distance;
+      const graphScore = Math.max(
+        0,
+        graphResult.seedHybridScore - distancePenalty,
+      );
 
       const candidate: HybridSearchResult = {
         ...semanticUnit,
