@@ -20,9 +20,27 @@ export class EvaluationService {
       this.safety.evaluate(input),
     ]);
 
-    let semantic = structural.passed
-      ? await this.semantic.evaluate(input)
-      : { passed: false, score: 0, details: ["Skipped — structural failed"] };
+    const shouldRunSemantic = Boolean(
+      input.deepEvaluation ?? process.env.ENABLE_SEMANTIC_EVALUATION === "true",
+    );
+
+    let semantic: { passed: boolean; score: number; details: string[] };
+
+    if (!shouldRunSemantic) {
+      semantic = {
+        passed: true,
+        score: 100,
+        details: ["Bypassed (Fast path: Structural + Safety guardrails active)"],
+      };
+    } else if (structural.passed) {
+      semantic = await this.semantic.evaluate(input);
+    } else {
+      semantic = {
+        passed: false,
+        score: 0,
+        details: ["Skipped — structural validation failed"],
+      };
+    }
 
     const issues: EvaluationIssue[] = [
       ...this.toIssues(structural, "structural"),
@@ -30,11 +48,16 @@ export class EvaluationService {
       ...this.toIssues(safety, "safety"),
     ];
 
-    const overallScore = Math.round(
-      structural.score * 0.3 + semantic.score * 0.5 + safety.score * 0.2,
-    );
+    const overallScore = shouldRunSemantic
+      ? Math.round(
+          structural.score * 0.3 + semantic.score * 0.5 + safety.score * 0.2,
+        )
+      : Math.round(structural.score * 0.6 + safety.score * 0.4);
 
-    const passed = structural.passed && safety.passed && semantic.passed;
+    const passed =
+      structural.passed &&
+      safety.passed &&
+      (!shouldRunSemantic || semantic.passed);
 
     return {
       passed,

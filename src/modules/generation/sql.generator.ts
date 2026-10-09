@@ -56,6 +56,68 @@ RULES:
     return this.cleanSql(sql);
   }
 
+  async fix(
+    question: string,
+    failedSql: string,
+    errorDetails: string,
+    semanticUnits: SemanticSearchResult[],
+    dialect: SqlDialect = "postgresql",
+  ): Promise<string> {
+    if (semanticUnits.length === 0) {
+      throw new Error("No schema context available for SQL correction");
+    }
+
+    const schemaContext = semanticUnits
+      .map((unit) => unit.content)
+      .join("\n\n---\n\n");
+
+    const prompt = `
+You are an expert ${dialect} SQL generator and debugger.
+
+The following SQL query was generated for the user's question, but it FAILED during validation or execution.
+
+USER QUESTION:
+${question}
+
+FAILED SQL:
+${failedSql}
+
+ERROR DETAILS:
+${errorDetails}
+
+DATABASE SCHEMA:
+${schemaContext}
+
+TASK:
+Analyze the error and the database schema carefully. Produce a corrected ${dialect} SQL query that resolves the issue.
+
+RULES:
+- Generate ${dialect}-compatible SQL.
+- Use only tables and columns present in the schema.
+- Use the provided foreign keys to determine relationships.
+- Do not invent tables, columns, or relationships.
+- Generate only a read-only SELECT query.
+- Never generate modifying statements (INSERT, UPDATE, DELETE, DROP, etc.).
+- Include a LIMIT clause (maximum 100) if multiple rows can be returned, unless an explicit aggregate (e.g. COUNT, SUM) is calculated.
+- Do not include explanations.
+- Do not use markdown code fences.
+- Return ONLY the corrected SQL query.
+`;
+
+    const response = await gemini.models.generateContent({
+      model: GEMINI_TEXT_MODEL,
+      contents: prompt,
+    });
+
+    const sql = response.text?.trim();
+
+    if (!sql) {
+      throw new Error("Gemini returned an empty corrected SQL query");
+    }
+
+    return this.cleanSql(sql);
+  }
+
   private cleanSql(sql: string): string {
     return sql
       .replace(/^```(?:sql)?\s*/i, "")
@@ -63,3 +125,4 @@ RULES:
       .trim();
   }
 }
+

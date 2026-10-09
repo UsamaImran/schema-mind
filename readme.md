@@ -161,7 +161,8 @@ curl -X POST http://localhost:3000/api/schema/retrieve \
   -H "Content-Type: application/json" \
   -d '{
     "question": "Show me the top 5 most rented films",
-    "databaseName": "schema_mind"
+    "databaseName": "schema_mind",
+    "deepEvaluation": false
   }'
 ```
 
@@ -172,9 +173,10 @@ curl -X POST http://localhost:3000/api/schema/retrieve \
   "success": true,
   "question": "Show me the top 5 most rented films",
   "sql": "SELECT f.title, COUNT(r.rental_id) AS rental_count\nFROM film f\nJOIN inventory i ON f.film_id = i.film_id\nJOIN rental r ON i.inventory_id = r.inventory_id\nGROUP BY f.title\nORDER BY rental_count DESC\nLIMIT 5;",
+  "selfHealed": false,
   "evaluation": {
     "passed": true,
-    "score": 95
+    "score": 100
   },
   "execution": {
     "rows": [...],
@@ -184,7 +186,9 @@ curl -X POST http://localhost:3000/api/schema/retrieve \
 }
 ```
 
-If evaluation fails, the API returns `400` with the full evaluation details and **does not execute** the query.
+- **Fast Path (Default)**: Leverages deterministic AST validation + safety pattern checks and read-only execution for sub-second responses (~1.2s). Set `"deepEvaluation": true` to opt into secondary LLM-as-a-judge scoring.
+- **Automated Self-Correction**: If the initial SQL encounters an AST constraint or a database runtime error (e.g. column typo or join ambiguity), the engine automatically initiates a self-correction loop with the error diagnostics and returns `"selfHealed": true`.
+- If evaluation still fails after self-healing, the API returns `400` with the failure details and **does not execute** the query.
 
 ### Local development (without Docker)
 
