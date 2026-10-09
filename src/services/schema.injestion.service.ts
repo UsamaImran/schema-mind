@@ -124,7 +124,12 @@ export class IngestionService {
         `Graph built: ${schemaGraph.nodes.length} nodes, ${schemaGraph.edges.length} edges`,
       );
 
-      const semanticUnits: SemanticUnitInput[] = [];
+      const tableEntries: Array<{
+        schemaName: string;
+        tableName: string;
+        content: string;
+        tokenCount: number;
+      }> = [];
 
       for (const schema of databaseSchema.schemas) {
         for (const table of schema.tables) {
@@ -136,27 +141,35 @@ export class IngestionService {
 
           const tokenCount = this.tokenizerService.count(content);
 
-          const [embedding] = await this.embeddingService.embed([content]);
-
-          if (!embedding?.length) {
-            throw new Error(
-              `Failed to generate embedding for ${schema.name}.${table.name}`,
-            );
-          }
-
-          semanticUnits.push({
-            sourceId: schemaSource._id,
-            databaseName,
+          tableEntries.push({
             schemaName: schema.name,
             tableName: table.name,
-            type: "table",
             content,
             tokenCount,
-            embedding,
-            dialect: databaseSchema.dialect,
           });
         }
       }
+
+      console.log(
+        `Generating embeddings for ${tableEntries.length} tables in batched requests...`,
+      );
+
+      const allContents = tableEntries.map((entry) => entry.content);
+      const embeddings = await this.embeddingService.embed(allContents);
+
+      const semanticUnits: SemanticUnitInput[] = tableEntries.map(
+        (entry, index) => ({
+          sourceId: schemaSource._id,
+          databaseName,
+          schemaName: entry.schemaName,
+          tableName: entry.tableName,
+          type: "table",
+          content: entry.content,
+          tokenCount: entry.tokenCount,
+          embedding: embeddings[index]!,
+          dialect: databaseSchema.dialect,
+        }),
+      );
 
       await this.semanticUnitRepository.replaceForSource(
         databaseName,

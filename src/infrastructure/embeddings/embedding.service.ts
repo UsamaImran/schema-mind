@@ -1,6 +1,7 @@
 import { GEMINI_EMBEDDING_MODEL, gemini } from "../../config/gemini.js";
 
 export class EmbeddingService {
+  private static readonly BATCH_SIZE = 50;
   private readonly model = GEMINI_EMBEDDING_MODEL;
 
   async embed(texts: string[]): Promise<number[][]> {
@@ -8,37 +9,41 @@ export class EmbeddingService {
       return [];
     }
 
-    const result = await gemini.models.embedContent({
-      model: this.model,
-      contents: texts,
-      config: {
-        taskType: "RETRIEVAL_DOCUMENT",
-      },
-    });
+    const allVectors: number[][] = [];
 
-    const embeddings = result.embeddings;
+    for (let i = 0; i < texts.length; i += EmbeddingService.BATCH_SIZE) {
+      const chunk = texts.slice(i, i + EmbeddingService.BATCH_SIZE);
 
-    if (!embeddings || embeddings.length !== texts.length) {
-      throw new Error(
-        `Embedding count mismatch: expected ${texts.length}, got ${
-          embeddings?.length ?? 0
-        }`,
-      );
-    }
+      const result = await gemini.models.embedContent({
+        model: this.model,
+        contents: chunk,
+        config: {
+          taskType: "RETRIEVAL_DOCUMENT",
+        },
+      });
 
-    const vectors = embeddings.map((embedding, index) => {
-      const values = embedding.values;
+      const embeddings = result.embeddings;
 
-      if (!values?.length) {
+      if (!embeddings || embeddings.length !== chunk.length) {
         throw new Error(
-          `Empty embedding returned for document at index ${index}`,
+          `Embedding count mismatch: expected ${chunk.length}, got ${
+            embeddings?.length ?? 0
+          }`,
         );
       }
 
-      return values;
-    });
+      for (let j = 0; j < embeddings.length; j++) {
+        const values = embeddings[j]?.values;
+        if (!values?.length) {
+          throw new Error(
+            `Empty embedding returned for document at index ${i + j}`,
+          );
+        }
+        allVectors.push(values);
+      }
+    }
 
-    return vectors;
+    return allVectors;
   }
 
   async embedQuery(text: string): Promise<number[]> {

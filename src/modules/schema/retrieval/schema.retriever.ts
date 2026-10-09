@@ -77,11 +77,7 @@ export class SchemaRetriever {
       finalLimit,
     );
 
-    const [queryEmbedding] = await this.embeddingService.embed([question]);
-
-    if (!queryEmbedding?.length) {
-      throw new Error("Failed to generate query embedding");
-    }
+    const queryEmbedding = await this.embeddingService.embedQuery(question);
 
     const [vectorResults, keywordResults] = await Promise.all([
       this.semanticUnitRepository.vectorSearch(
