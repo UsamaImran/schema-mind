@@ -4,20 +4,22 @@ Schema-aware Retrieval-Augmented Generation (RAG) system that converts natural-l
 
 It introspects a live database, builds semantic units and a foreign-key graph, embeds them into MongoDB Atlas, retrieves only the most relevant tables using hybrid search + graph expansion, generates dialect-aware SQL with Gemini, validates the query through multiple safety layers, and executes it — returning real results.
 
-Currently supports **PostgreSQL** and **MySQL**. The architecture is designed to support additional relational databases (target: 4–5 total).
+Currently supports **PostgreSQL**, **MySQL**, and **Oracle Database**. The architecture is designed to support additional relational databases (target: 4–5 total).
 
 ---
 
 ## Features
 
 - **Live Schema Introspection**  
-  Reads tables, columns, primary keys, foreign keys, and indexes from PostgreSQL and MySQL.
+  Reads tables, columns, primary keys, foreign keys, and indexes from PostgreSQL, MySQL, and Oracle.
 
 - **Automatic Schema Synchronization**
-  - Fingerprint-based change detection
+  - Fingerprint-based change detection (SHA-256 stored in MongoDB to prevent redundant re-ingestion across application restarts)
   - Real-time schema change listeners
     - PostgreSQL: event-driven (`LISTEN/NOTIFY` + DDL event trigger)
     - MySQL: periodic fingerprint polling
+    - Oracle: periodic DDL metadata polling (`ALL_OBJECTS.LAST_DDL_TIME`)
+  - Configurable polling intervals (`SCHEMA_POLL_INTERVAL_MS`)
   - Automatically re-ingests when the schema changes
 
 - **Hybrid Retrieval + Graph Bridge Discovery**
@@ -38,6 +40,9 @@ Currently supports **PostgreSQL** and **MySQL**. The architecture is designed to
 
 - **Safe Execution**  
   Dialect-specific executors with read-only mode, row limits, and timeouts.
+  - PostgreSQL: `BEGIN TRANSACTION READ ONLY` + statement timeouts
+  - MySQL: `SET TRANSACTION READ ONLY` + socket timeout protection
+  - Oracle: `SET TRANSACTION READ ONLY` + `connection.break()` timeout cancellation and ANSI `FETCH FIRST n ROWS ONLY` clamping
 
 - **Dockerized**  
   One-command local setup with sample database + MongoDB Atlas Local.
@@ -87,7 +92,7 @@ User Question
            │ (only if passed)
            ▼
 ┌─────────────────────┐
-│   SQL Executor      │  (PostgreSQL / MySQL)
+│   SQL Executor      │  (PostgreSQL / MySQL / Oracle)
 └──────────┬──────────┘
            │
            ▼
@@ -102,8 +107,8 @@ User Question
 
 | Layer                | Technology                               |
 | -------------------- | ---------------------------------------- |
-| Runtime              | Node.js 22 · TypeScript · Express 5      |
-| Source Databases     | PostgreSQL · MySQL                       |
+| Runtime              | Node.js 22+ · TypeScript · Express 5     |
+| Source Databases     | PostgreSQL · MySQL · Oracle Database     |
 | Vector / Graph Store | MongoDB Atlas (vector + keyword + graph) |
 | AI                   | Google Gemini (`@google/genai`)          |
 | SQL Parsing          | `node-sql-parser`                        |
@@ -127,13 +132,21 @@ Create a `.env` file in the project root:
 NODE_ENV=development
 PORT=3000
 
-DATABASE_DIALECT=postgresql          # or mysql
+# Choose dialect: postgresql | mysql | oracle
+DATABASE_DIALECT=postgresql
 
-DB_HOST=postgres                     # or mysql
-DB_PORT=5432
-DB_NAME=schema_mind
+# Database connection credentials
+DB_HOST=postgres                     # or mysql / localhost
+DB_PORT=5432                         # 5432 for Postgres, 3306 for MySQL, 1521 for Oracle
+DB_NAME=schema_mind                  # or Oracle service/PDB name
 DB_USER=postgres
 DB_PASSWORD=your_password
+
+# Optional Oracle configuration
+ORACLE_SERVICE_NAME=FREEPDB1         # optional PDB / service name override
+
+# Polling interval for schema change detection (MySQL & Oracle, in ms)
+SCHEMA_POLL_INTERVAL_MS=30000
 
 MONGO_URI=mongodb://admin:admin@mongodb:27017/schema_mind?authSource=admin
 GEMINI_API_KEY=your_gemini_api_key
@@ -147,6 +160,9 @@ docker compose --profile postgresql up --build
 
 # or MySQL
 docker compose --profile mysql up --build
+
+# or Oracle Database 23ai Free
+docker compose --profile oracle up --build
 ```
 
 - The selected database starts with a sample schema
@@ -213,6 +229,7 @@ src/
 │   ├── mongo/                  # Semantic units + schema graph repositories
 │   ├── postgres/               # Postgres adapter, introspector, change listener
 │   ├── mysql/                  # MySQL adapter, introspector, change listener
+│   ├── oracle/                 # Oracle adapter, introspector, change listener
 │   ├── schema-change/          # Base schema change listener
 │   └── tokenization/
 ├── modules/
@@ -243,6 +260,7 @@ Even after passing evaluation, the executor runs in **read-only mode** with row 
 ## License
 
 MIT
+
 
 ```
 
