@@ -45,12 +45,15 @@ export class SchemaController {
         dialect,
       );
 
+      const isDeepEvaluation =
+        typeof deepEvaluation === "boolean" ? deepEvaluation : undefined;
+
       let evaluation = await this.evaluator.evaluate({
         question,
         sql,
         dialect,
         schemaContext,
-        deepEvaluation: Boolean(deepEvaluation),
+        deepEvaluation: isDeepEvaluation,
       });
 
       let selfHealed = false;
@@ -81,7 +84,7 @@ export class SchemaController {
             sql: fixedSql,
             dialect,
             schemaContext,
-            deepEvaluation: Boolean(deepEvaluation),
+            deepEvaluation: isDeepEvaluation,
           });
 
           if (fixedEvaluation.passed) {
@@ -126,7 +129,7 @@ export class SchemaController {
             sql: fixedSql,
             dialect,
             schemaContext,
-            deepEvaluation: Boolean(deepEvaluation),
+            deepEvaluation: isDeepEvaluation,
           });
 
           if (fixedEvaluation.passed) {

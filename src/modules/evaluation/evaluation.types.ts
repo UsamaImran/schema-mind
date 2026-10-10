@@ -37,5 +37,5 @@ export interface EvaluationInput {
   sql: string;
   dialect: SqlDialect;
   schemaContext: string; // joined semantic units
-  deepEvaluation?: boolean;
+  deepEvaluation?: boolean | undefined;
 }

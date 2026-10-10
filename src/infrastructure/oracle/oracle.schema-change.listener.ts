@@ -28,6 +28,7 @@ export class OracleSchemaChangeListener extends BaseSchemaChangeListener {
   private intervalMs: number;
   private timer: NodeJS.Timeout | undefined;
   private lastFingerprint: string = "";
+  private isChecking: boolean = false;
 
   constructor(
     adapter: OracleAdapter,
@@ -53,6 +54,11 @@ export class OracleSchemaChangeListener extends BaseSchemaChangeListener {
   }
 
   private async check(): Promise<void> {
+    if (this.isChecking) {
+      return;
+    }
+
+    this.isChecking = true;
     try {
       const fingerprint = await this.computeFingerprint();
       if (this.lastFingerprint && this.lastFingerprint !== fingerprint) {
@@ -61,6 +67,8 @@ export class OracleSchemaChangeListener extends BaseSchemaChangeListener {
       this.lastFingerprint = fingerprint;
     } catch (err) {
       console.error("Oracle schema poll failed:", err);
+    } finally {
+      this.isChecking = false;
     }
   }
 

@@ -7,6 +7,7 @@ export class MySQLSchemaChangeListener extends BaseSchemaChangeListener {
   private intervalMs: number;
   private timer: NodeJS.Timeout | undefined;
   private lastFingerprint: string = "";
+  private isChecking: boolean = false;
 
   constructor(
     adapter: MySQLAdapter,
@@ -32,6 +33,11 @@ export class MySQLSchemaChangeListener extends BaseSchemaChangeListener {
   }
 
   private async check(): Promise<void> {
+    if (this.isChecking) {
+      return;
+    }
+
+    this.isChecking = true;
     try {
       const fingerprint = await this.computeFingerprint();
       if (this.lastFingerprint && this.lastFingerprint !== fingerprint) {
@@ -40,6 +46,8 @@ export class MySQLSchemaChangeListener extends BaseSchemaChangeListener {
       this.lastFingerprint = fingerprint;
     } catch (err) {
       console.error("MySQL schema poll failed:", err);
+    } finally {
+      this.isChecking = false;
     }
   }
 
