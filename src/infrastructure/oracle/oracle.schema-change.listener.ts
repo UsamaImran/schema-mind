@@ -1,10 +1,22 @@
+import { createHash } from "node:crypto";
 import { BaseSchemaChangeListener } from "../schema-change/base.schema-change.listener.js";
 import type { OracleAdapter } from "./oracle.adapter.js";
 import { env } from "../../config/env.js";
 
-interface OracleFingerprintRow {
+interface OracleObjectRow {
   [key: string]: unknown;
-  FINGERPRINT: string;
+  OBJECT_NAME: string;
+  OBJECT_TYPE: string;
+  DDL_TIME: string;
+  STATUS: string;
+}
+
+interface OracleColumnMetaRow {
+  [key: string]: unknown;
+  TABLE_NAME: string;
+  COLUMN_NAME: string;
+  DATA_TYPE: string;
+  NULLABLE: string;
 }
 
 export class OracleSchemaChangeListener extends BaseSchemaChangeListener {
@@ -51,23 +63,49 @@ export class OracleSchemaChangeListener extends BaseSchemaChangeListener {
   private async computeFingerprint(): Promise<string> {
     const schema = env.DB_USER.toUpperCase();
 
-    // Query count of objects and the most recent DDL timestamp
-    // This isolates DDL modifications from data row (DML) mutations.
-    const rows = await this.adapter.query<OracleFingerprintRow>(
+    // Query all tables and views with their individual DDL timestamps and statuses
+    const objectRows = await this.adapter.query<OracleObjectRow>(
       `
       SELECT 
-        COUNT(*) || ':' || NVL(TO_CHAR(MAX(LAST_DDL_TIME), 'YYYY-MM-DD"T"HH24:MI:SS'), 'EMPTY') AS FINGERPRINT
+        OBJECT_NAME,
+        OBJECT_TYPE,
+        NVL(TO_CHAR(LAST_DDL_TIME, 'YYYY-MM-DD"T"HH24:MI:SS'), '') AS DDL_TIME,
+        STATUS
       FROM ALL_OBJECTS
       WHERE OWNER = :owner
         AND OBJECT_TYPE IN ('TABLE', 'VIEW')
+      ORDER BY OBJECT_NAME
       `,
       [schema],
     );
 
-    if (rows.length > 0 && rows[0]?.FINGERPRINT) {
-      return String(rows[0].FINGERPRINT);
+    // Query column structures to ensure column alterations (add, drop, modify) within the same second are caught
+    const columnRows = await this.adapter.query<OracleColumnMetaRow>(
+      `
+      SELECT 
+        TABLE_NAME,
+        COLUMN_NAME,
+        DATA_TYPE,
+        NULLABLE
+      FROM ALL_TAB_COLUMNS
+      WHERE OWNER = :owner
+      ORDER BY TABLE_NAME, COLUMN_ID
+      `,
+      [schema],
+    );
+
+    const hash = createHash("sha256");
+
+    for (const obj of objectRows) {
+      hash.update(`${obj.OBJECT_NAME}:${obj.OBJECT_TYPE}:${obj.DDL_TIME}:${obj.STATUS}|`);
     }
 
-    return "";
+    hash.update("---COLUMNS---|");
+
+    for (const col of columnRows) {
+      hash.update(`${col.TABLE_NAME}.${col.COLUMN_NAME}:${col.DATA_TYPE}:${col.NULLABLE}|`);
+    }
+
+    return hash.digest("hex");
   }
 }

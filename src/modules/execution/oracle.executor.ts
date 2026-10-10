@@ -24,13 +24,11 @@ export class OracleExecutor implements IQueryExecutor {
       }
 
       const cleanSql = sql.trim().replace(/;\s*$/, "");
-      const maxRows = options.maxRows ?? 100;
+      const maxRows = Math.max(1, Math.floor(options.maxRows ?? 100));
 
-      // Oracle 12c+ standard ANSI row limiting: FETCH FIRST n ROWS ONLY
-      const hasFetchFirst = /\bfetch\s+(first|next)\s+\d+\s+rows\s+only\b/i.test(cleanSql);
-      const executableSql = hasFetchFirst
-        ? cleanSql
-        : `${cleanSql} FETCH FIRST ${maxRows} ROWS ONLY`;
+      // Wrap in an outer bounded query so database-level row production is strictly capped in Oracle (12c+ standard ANSI),
+      // preventing exhaustion from oversized user limits or inner subquery limits.
+      const executableSql = `SELECT * FROM (${cleanSql}) FETCH FIRST ${maxRows} ROWS ONLY`;
 
       // Timeout execution using Promise.race and connection.break()
       let executePromise = connection.execute<Record<string, unknown>>(

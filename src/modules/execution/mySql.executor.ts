@@ -26,10 +26,11 @@ export class MySQLExecutor implements IQueryExecutor {
       }
 
       const cleanSql = sql.trim().replace(/;\s*$/, "");
-      const maxRows = options.maxRows ?? 100;
-      const executableSql = /\blimit\s+\d+/i.test(cleanSql)
-        ? cleanSql
-        : `${cleanSql} LIMIT ${maxRows}`;
+      const maxRows = Math.max(1, Math.floor(options.maxRows ?? 100));
+
+      // Wrap in an outer bounded query so database-level row production is strictly capped,
+      // preventing exhaustion from oversized user limits (e.g. LIMIT 1000000) or inner subquery limits.
+      const executableSql = `SELECT * FROM (${cleanSql}) AS _schema_mind_bounded LIMIT ${maxRows}`;
 
       const queryOptions: QueryOptions = {
         sql: executableSql,

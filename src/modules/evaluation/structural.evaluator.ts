@@ -34,7 +34,7 @@ export class StructuralEvaluator {
       for (const table of referencedTables) {
         if (!validTables.has(table.toLowerCase())) {
           details.push(`Table '${table}' not in retrieved schema context`);
-          score -= 15;
+          score = 0; // Hard failure: Hallucinated/ungrounded table cannot pass validation
         }
       }
     } catch (err: any) {
@@ -79,16 +79,23 @@ export class StructuralEvaluator {
       }
     }
 
+    const cleanIdentifier = (id: string): string => {
+      // Strip quotes and schema qualifiers (e.g., "public"."users" -> users)
+      const unquoted = id.replace(/["`]/g, "").trim();
+      const parts = unquoted.split(".");
+      return parts[parts.length - 1] ?? unquoted;
+    };
+
     const walk = (node: any) => {
       if (!node || typeof node !== "object") return;
 
       // FROM / JOIN table sources
       if (node.table && typeof node.table === "string") {
-        const realName =
+        const rawName =
           node.name && typeof node.name === "object" && node.name.name
             ? node.name.name
             : node.table;
-        tables.push(realName);
+        tables.push(cleanIdentifier(rawName));
       }
 
       // Recurse into from/join structures
@@ -120,10 +127,15 @@ export class StructuralEvaluator {
 
   private extractValidTables(schemaContext: string): Set<string> {
     const tables = new Set<string>();
-    const regex = /Table:\s*(\w+)/g;
+    const regex = /Table:\s*([^\s\n\r,]+)/g;
     let match: RegExpExecArray | null;
     while ((match = regex.exec(schemaContext)) !== null) {
-      if (!!match[1]) tables.add(match[1].toLowerCase());
+      if (match[1]) {
+        const raw = match[1].replace(/["`]/g, "").trim();
+        const parts = raw.split(".");
+        const tableOnly = parts[parts.length - 1] ?? raw;
+        tables.add(tableOnly.toLowerCase());
+      }
     }
     return tables;
   }
