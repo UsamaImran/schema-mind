@@ -16,7 +16,11 @@ interface OracleColumnMetaRow {
   TABLE_NAME: string;
   COLUMN_NAME: string;
   DATA_TYPE: string;
+  CHAR_LENGTH: number | null;
+  DATA_PRECISION: number | null;
+  DATA_SCALE: number | null;
   NULLABLE: string;
+  DATA_DEFAULT: string | null;
 }
 
 export class OracleSchemaChangeListener extends BaseSchemaChangeListener {
@@ -79,14 +83,19 @@ export class OracleSchemaChangeListener extends BaseSchemaChangeListener {
       [schema],
     );
 
-    // Query column structures to ensure column alterations (add, drop, modify) within the same second are caught
+    // Query comprehensive column structures (including length, precision, scale, and defaults)
+    // so any modification (e.g. VARCHAR2(50) -> VARCHAR2(100) or default change) is deterministically caught
     const columnRows = await this.adapter.query<OracleColumnMetaRow>(
       `
       SELECT 
         TABLE_NAME,
         COLUMN_NAME,
         DATA_TYPE,
-        NULLABLE
+        CHAR_LENGTH,
+        DATA_PRECISION,
+        DATA_SCALE,
+        NULLABLE,
+        DATA_DEFAULT
       FROM ALL_TAB_COLUMNS
       WHERE OWNER = :owner
       ORDER BY TABLE_NAME, COLUMN_ID
@@ -103,7 +112,13 @@ export class OracleSchemaChangeListener extends BaseSchemaChangeListener {
     hash.update("---COLUMNS---|");
 
     for (const col of columnRows) {
-      hash.update(`${col.TABLE_NAME}.${col.COLUMN_NAME}:${col.DATA_TYPE}:${col.NULLABLE}|`);
+      const length = col.CHAR_LENGTH ?? "";
+      const prec = col.DATA_PRECISION ?? "";
+      const scale = col.DATA_SCALE ?? "";
+      const def = col.DATA_DEFAULT != null ? String(col.DATA_DEFAULT).trim() : "";
+      hash.update(
+        `${col.TABLE_NAME}.${col.COLUMN_NAME}:${col.DATA_TYPE}(${length},${prec},${scale}):${col.NULLABLE}:${def}|`,
+      );
     }
 
     return hash.digest("hex");
